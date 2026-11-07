@@ -34,7 +34,7 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
             else
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getRs2();
-            if (block.getImm() == "0")
+            if (block.getImm() == "0" && block.getOpcode() != "vsetvli")
                 code += ", v0.t";
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))

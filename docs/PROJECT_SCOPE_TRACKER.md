@@ -15,13 +15,13 @@ Last updated: 2026-11-07
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |
 | Signed / unsigned comparisons | Implemented subset | `vmslt.vv`, `vmsltu.vv`; signed boundary and unsigned comparison tests span all supported SEWs. |
-| Comparison masks | Partial | Predicate bits are packed by lane index in destination vector registers; execution-time use as `v0` predication remains. |
+| Comparison masks | Implemented subset | Predicate bits are packed by lane index; comparison results can feed `v0.t` predication and `vcpop.m`. |
 | Reductions: sum, min, max | Implemented subset | `vredsum.vs`, `vredmin.vs`, `vredmax.vs`; `vs1[0]` seed and `vd[0]` result; signed min/max. |
 | Reductions: AND, OR, XOR | Implemented | `vredand.vs`, `vredor.vs`, `vredxor.vs`; all supported SEWs covered by tests. |
 | Count elements matching a condition | Implemented subset | `vcpop.m rd, vs2` counts active set predicate bits and writes a GPR; comparison-to-count sequence tested. |
 | Average from sum and count | Not started | Define rounding behavior in tests; handle zero count explicitly. |
-| Masked execution | Not started | Masked arithmetic, memory and inactive-element policy. |
-| Inactive and tail element handling | Partial | Unmasked data operations preserve tail elements; comparisons update active packed bits and preserve other bits. Masked-off behavior remains. |
+| Masked execution | Implemented subset | Optional `, v0.t` on vector-vector ops, reductions, `vcpop.m`, and unit-stride loads/stores; inactive destination lanes are undisturbed. |
+| Inactive and tail element handling | Implemented for current subset | `vta=vma=0` behavior: masked-off and tail destination elements remain unchanged; masked stores skip inactive lanes. |
 | Unit-stride vector loads/stores | Implemented subset; CI coverage present | `vle8/16/32/64.v`, `vse8/16/32/64.v`; currently unmasked and requires EEW=SEW. |
 | Assembler, decoder and execution integration | Partial | Current subset is wired end-to-end; expand as instructions are added. |
 | CLI view of vector registers | Partial | `registers_dump.json` includes all vector registers. |
@@ -56,7 +56,7 @@ Last updated: 2026-11-07
 - Supported state is VLEN=128, LMUL=1, SEW in {8,16,32,64}.
 - Current vector arithmetic is unmasked `vadd.vv` and `vsub.vv`; unmasked logical operations are `vand.vv`, `vor.vv`, and `vxor.vv`.
 - Current vector comparisons are unmasked `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`, and produce packed predicate bits in their destination vector register.
-- Current vector memory support is unmasked unit-stride, one-field load/store with EEW=SEW.
+- Current vector memory support is unit-stride, one-field load/store with EEW=SEW; optional `v0.t` masks skip inactive lanes.
 - This is an incremental RVV subset, not a claim of full RVV 1.0 compliance.
 
 ## Working rules

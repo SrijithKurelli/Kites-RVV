@@ -35,8 +35,10 @@ When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
 ### `vadd.vv vd, vs2, vs1` and `vsub.vv vd, vs2, vs1`
 
 These operations use the current `SEW` and operate on the first `vl` elements.
-Addition and subtraction wrap modulo the element width. The implementation
-supports unmasked operations (`vm=1`) only. Elements beyond `vl` are preserved
+Addition and subtraction wrap modulo the element width. Each form also accepts
+an optional `, v0.t` operand (for example, `vadd.vv vd, vs2, vs1, v0.t`).
+When masked, only lanes with the corresponding `v0` predicate bit set execute;
+masked-off destination lanes remain unchanged. Elements beyond `vl` are preserved
 (tail-undisturbed).
 
 Vector instructions use the standard 32-bit instruction word layout for the
@@ -44,7 +46,7 @@ implemented encodings. The assembly operand order is `vd, vs2, vs1`.
 
 ### Logical vector-vector instructions
 
-The following unmasked operations apply bitwise to each active SEW-sized lane:
+The following operations apply bitwise to each active SEW-sized lane and accept an optional trailing `, v0.t` mask operand:
 
 - `vand.vv vd, vs2, vs1`
 - `vor.vv vd, vs2, vs1`
@@ -52,8 +54,9 @@ The following unmasked operations apply bitwise to each active SEW-sized lane:
 
 ### Integer vector comparisons
 
-The following unmasked vector-vector comparisons compare corresponding signed or unsigned
-integer lanes and write one predicate bit per active lane into `vd`. Predicate bit
+The following vector-vector comparisons compare corresponding signed or unsigned
+integer lanes and write one predicate bit per active lane into `vd`. They accept an optional
+trailing `, v0.t` mask operand; masked-off predicate bits are left unchanged. Predicate bit
 `i` is stored at bit `i` of the destination vector register (packed across bytes):
 
 - `vmseq.vv vd, vs2, vs1` — equal
@@ -66,7 +69,7 @@ remain unchanged. These mask-producing instructions are the basis for the next m
 milestone. Masked execution (`v0.t`) is not implemented yet.
 ### Vector-wide integer reductions
 
-The following unmasked reductions use `vs1[0]` as the initial accumulator, fold
+The following reductions accept an optional trailing `, v0.t` mask operand. They use `vs1[0]` as the initial accumulator, fold
 the active elements of `vs2` in lane order, and write the result to `vd[0]`.
 Other destination elements are preserved. Sum wraps modulo SEW; min and max use
 signed comparisons:
@@ -82,11 +85,12 @@ signed comparisons:
 
 `vcpop.m rd, vs2` counts set predicate bits in the active portion (`0..vl-1`)
 of vector register `vs2` and writes the count to scalar integer register `rd`.
-This lets an assembly sequence count elements selected by a preceding comparison.
+An optional trailing `, v0.t` counts only elements enabled by `v0`. This lets an
+assembly sequence count elements selected by a preceding comparison.
 
 ### Unit-stride vector memory instructions
 
-The assembler and RVSS processor support these unmasked forms:
+The assembler and RVSS processor support these unit-stride forms. Each accepts an optional trailing `, v0.t` operand:
 
 - `vle8.v vd, (rs1)` and `vse8.v vs3, (rs1)`
 - `vle16.v vd, (rs1)` and `vse16.v vs3, (rs1)`
@@ -98,7 +102,7 @@ transferred contiguously at addresses `base + lane * (EEW / 8)`. For this
 initial subset, `EEW` must equal the configured `SEW`, `vl` controls the
 number of transferred elements, and load tail elements are preserved. Stores
 record their memory changes so the simulator's undo/redo mechanism can reverse
-and replay them. Masked, strided, indexed, and segment memory operations are
+and replay them. Masked forms use the `v0` predicate and skip inactive lanes; strided, indexed, and segment memory operations are
 not supported.
 
 ## Current limitations
@@ -106,10 +110,10 @@ not supported.
 - Vector instructions are implemented only in the RVSS single-cycle processor.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Vector arithmetic, logical operations, comparisons, loads, and stores support unmasked operations only.
+- Arithmetic, logical, comparison, reduction, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
-- Masked execution, average computation, and several other RVV operations remain unimplemented.
+- Average computation remains an assembly-level recipe to complete after the mask/count path is in place; strided memory, pipeline, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 
@@ -139,7 +143,7 @@ consume it as a predication mask.
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, reductions and mask population count,
+instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions and mask population count,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, and unsupported vector memory forms.
-The full CMake test suite requires Qt 6.9.2 and GoogleTest.
+The full CMake test suite requires Qt 6.9.2 and GoogleTest. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.
