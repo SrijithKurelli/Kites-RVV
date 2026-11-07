@@ -517,27 +517,44 @@ void RVSSProcessor::ExecuteVector()
     const bool vm = ((current_instruction_ >> 25) & 1u) != 0;
     const uint8_t vs2 = (current_instruction_ >> 20) & 0x1F;
     const uint8_t vs1 = rs1;
-    if (!vm)
-        throw std::runtime_error("Masked vector operations are not supported in this milestone");
-    if (funct3 != 0b000)
-        throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
 
-    const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
-    const bool arithmetic_or_logic =
-        funct6 == 0b000000 || funct6 == 0b000010 ||
-        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011;
-    if (!comparison && !arithmetic_or_logic)
-        throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
+    // vcpop.m is an OPMVX unary operation with a fixed vs1 field of 10000.
+    if (funct3 == 0b110 && funct6 == 0b010000 && vs1 == 0b10000)
+    {
+        if (!vm)
+            throw std::runtime_error("Masked vcpop.m is not supported in this milestone");
+        const auto mask_register = registers_.ReadVector(vs2);
+        uint64_t count = 0;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+            count += (mask_register[lane / 8] >> (lane % 8)) & 1u;
+        if (vd != 0)
+        {
+            const uint64_t old_value = registers_.ReadGpr(vd);
+            registers_.WriteGpr(vd, count);
+            const uint64_t new_value = registers_.ReadGpr(vd);
+            if (old_value != new_value)
+                current_delta_.register_changes.push_back({vd, 0, old_value, new_value});
+        }
+        return;
+    }
 
-    const auto lhs = registers_.ReadVector(vs2);
-    const auto rhs = registers_.ReadVector(vs1);
-    auto result = registers_.ReadVector(vd);
-    const auto old_destination = result;
     const size_t element_bytes = vector_sew_ / 8;
-    const uint64_t element_mask =
-        vector_sew_ == 64 ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
-
-    auto signedLess = [this](uint64_t a, uint64_t b)
+    const uint64_t element_mask = vector_sew_ == 64 ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
+    const auto readElement = [element_bytes](const auto &bytes, size_t lane)
+    {
+        uint64_t value = 0;
+        const size_t offset = lane * element_bytes;
+        for (size_t byte = 0; byte < element_bytes; ++byte)
+            value |= static_cast<uint64_t>(bytes[offset + byte]) << (8 * byte);
+        return value;
+    };
+    const auto writeElement = [element_bytes](auto &bytes, size_t lane, uint64_t value)
+    {
+        const size_t offset = lane * element_bytes;
+        for (size_t byte = 0; byte < element_bytes; ++byte)
+            bytes[offset + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
+    };
+    const auto signedLess = [this](uint64_t a, uint64_t b)
     {
         const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1);
         const bool a_negative = (a & sign_bit) != 0;
@@ -547,26 +564,76 @@ void RVSSProcessor::ExecuteVector()
         return a < b;
     };
 
+    // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order.
+    if (funct3 == 0b010)
+    {
+        if (!vm)
+            throw std::runtime_error("Masked vector reductions are not supported in this milestone");
+        const bool supported_reduction =
+            funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
+            funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111;
+        if (!supported_reduction)
+            throw std::runtime_error("Unsupported vector reduction instruction");
+
+        const auto source = registers_.ReadVector(vs2);
+        const auto seed = registers_.ReadVector(vs1);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        uint64_t accumulator = readElement(seed, 0);
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            const uint64_t value = readElement(source, lane);
+            switch (funct6)
+            {
+            case 0b000000: accumulator = (accumulator + value) & element_mask; break; // vredsum
+            case 0b000001: accumulator &= value; break; // vredand
+            case 0b000010: accumulator |= value; break; // vredor
+            case 0b000011: accumulator ^= value; break; // vredxor
+            case 0b000101: if (signedLess(value, accumulator)) accumulator = value; break; // vredmin
+            case 0b000111: if (signedLess(accumulator, value)) accumulator = value; break; // vredmax
+            default: break;
+            }
+        }
+        writeElement(result, 0, accumulator & element_mask);
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
+    if (!vm)
+        throw std::runtime_error("Masked vector operations are not supported in this milestone");
+    if (funct3 != 0b000)
+        throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
+
+    const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
+    const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000010 ||
+        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011;
+    if (!comparison && !arithmetic_or_logic)
+        throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
+
+    const auto lhs = registers_.ReadVector(vs2);
+    const auto rhs = registers_.ReadVector(vs1);
+    auto result = registers_.ReadVector(vd);
+    const auto old_destination = result;
     for (size_t lane = 0; lane < vector_vl_; ++lane)
     {
-        const size_t offset = lane * element_bytes;
-        uint64_t a = 0;
-        uint64_t b = 0;
-        for (size_t byte = 0; byte < element_bytes; ++byte)
-        {
-            a |= static_cast<uint64_t>(lhs[offset + byte]) << (8 * byte);
-            b |= static_cast<uint64_t>(rhs[offset + byte]) << (8 * byte);
-        }
-
+        const uint64_t a = readElement(lhs, lane);
+        const uint64_t b = readElement(rhs, lane);
         if (comparison)
         {
             bool predicate = false;
             switch (funct6)
             {
-            case 0b011000: predicate = (a == b); break; // vmseq.vv
-            case 0b011001: predicate = (a != b); break; // vmsne.vv
-            case 0b011010: predicate = (a < b); break;  // vmsltu.vv
-            case 0b011011: predicate = signedLess(a, b); break; // vmslt.vv
+            case 0b011000: predicate = (a == b); break; // vmseq
+            case 0b011001: predicate = (a != b); break; // vmsne
+            case 0b011010: predicate = (a < b); break;  // vmsltu
+            case 0b011011: predicate = signedLess(a, b); break; // vmslt
             default: break;
             }
             const uint8_t bit = static_cast<uint8_t>(1u << (lane % 8));
@@ -580,19 +647,17 @@ void RVSSProcessor::ExecuteVector()
             uint64_t value = 0;
             switch (funct6)
             {
-            case 0b000000: value = (a + b) & element_mask; break; // vadd.vv
-            case 0b000010: value = (a - b) & element_mask; break; // vsub.vv
-            case 0b001001: value = a & b; break;                 // vand.vv
-            case 0b001010: value = a | b; break;                 // vor.vv
-            case 0b001011: value = a ^ b; break;                 // vxor.vv
+            case 0b000000: value = (a + b) & element_mask; break;
+            case 0b000010: value = (a - b) & element_mask; break;
+            case 0b001001: value = a & b; break;
+            case 0b001010: value = a | b; break;
+            case 0b001011: value = a ^ b; break;
             default: break;
             }
-            for (size_t byte = 0; byte < element_bytes; ++byte)
-                result[offset + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
+            writeElement(result, lane, value);
         }
     }
 
-    // Data and mask destinations keep inactive/tail storage unchanged in this subset.
     registers_.WriteVector(vd, result);
     if (old_destination != result)
     {
@@ -602,7 +667,6 @@ void RVSSProcessor::ExecuteVector()
         current_delta_.register_changes.push_back(change);
     }
 }
-
 void RVSSProcessor::ExecuteCsr()
 {
     uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
