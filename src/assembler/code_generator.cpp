@@ -34,6 +34,8 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
             else
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getRs2();
+            if (block.getImm() == "0")
+                code += ", v0.t";
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
         {
@@ -410,9 +412,9 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                     throw std::runtime_error("Unsupported vector memory element width");
                 }
                 const uint32_t opcode = block.getOpcode().rfind("vle", 0) == 0 ? 0x07u : 0x27u;
-                // Unit-stride, unmasked, one-field vector memory operation:
-                // nf=0, mew=0, mop=00, vm=1, lumop/sumop=00000.
-                code = (1u << 25) | (rs1 << 15) | (width_encoding << 12) | (rd << 7) | opcode;
+                // Unit-stride, one-field vector memory operation. vm=0 means v0.t.
+                const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
+                code = (vm << 25) | (rs1 << 15) | (width_encoding << 12) | (rd << 7) | opcode;
             }
             else
             {
@@ -439,7 +441,8 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 else if (mnemonic == "vmsltu.vv") funct6 = 0b011010;
                 else if (mnemonic == "vmslt.vv") funct6 = 0b011011;
                 else throw std::runtime_error("Unsupported vector-vector instruction: " + mnemonic);
-                code = (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) |
+                const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
+                code = (funct6 << 26) | (vm << 25) | (vs2 << 20) | (vs1 << 15) |
                        (funct3 << 12) | (rd << 7) | 0x57u;
             }
         }
