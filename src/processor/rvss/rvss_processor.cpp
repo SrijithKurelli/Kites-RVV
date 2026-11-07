@@ -526,12 +526,14 @@ void RVSSProcessor::ExecuteVector()
     // vcpop.m is an OPMVX unary operation with a fixed vs1 field of 10000.
     if (funct3 == 0b110 && funct6 == 0b010000 && vs1 == 0b10000)
     {
-        if (!vm)
-            throw std::runtime_error("Masked vcpop.m is not supported in this milestone");
-        const auto mask_register = registers_.ReadVector(vs2);
+        const auto source_mask = registers_.ReadVector(vs2);
         uint64_t count = 0;
         for (size_t lane = 0; lane < vector_vl_; ++lane)
-            count += (mask_register[lane / 8] >> (lane % 8)) & 1u;
+        {
+            const bool source_bit = ((source_mask[lane / 8] >> (lane % 8)) & 1u) != 0;
+            if (source_bit && lane_is_active(lane))
+                ++count;
+        }
         if (vd != 0)
         {
             const uint64_t old_value = registers_.ReadGpr(vd);
@@ -572,6 +574,8 @@ void RVSSProcessor::ExecuteVector()
     // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order.
     if (funct3 == 0b010)
     {
+        if (vector_vl_ == 0)
+            return; // RVV reductions leave vd unchanged when vl=0.
         const bool supported_reduction =
             funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
             funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111;
