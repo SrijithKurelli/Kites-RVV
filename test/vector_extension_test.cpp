@@ -467,6 +467,128 @@ TEST(VectorExtension, VcpopCountsBitsProducedByVectorComparison)
     EXPECT_EQ(vm.registers_.ReadGpr(9), 2u);
 }
 
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesMaskedVectorForms)
+{
+    const auto program = assembleVectorSource(
+        "vadd.vv v1, v2, v3, v0.t\n"
+        "vredsum.vs v4, v5, v6, v0.t\n"
+        "vle8.v v7, (x5), v0.t\n"
+        "vse8.v v8, (x6), v0.t\n"
+        "vcpop.m x9, v10, v0.t\n");
+    ASSERT_EQ(program.text_buffer.size(), 5u);
+    for (uint32_t instruction : program.text_buffer)
+        EXPECT_EQ((instruction >> 25) & 1u, 0u);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vadd.vv v1, v2, v3, v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]),
+              "vredsum.vs v4, v5, v6, v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[2]),
+              "vle8.v v7, (x5), v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[3]),
+              "vse8.v v8, (x6), v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[4]),
+              "vcpop.m x9, v10, v0.t");
+}
+
+TEST(VectorExtension, MaskedArithmeticAndComparisonsPreserveInactiveElements)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 4);
+    vm.registers_.WriteVectorByte(0, 0, 0x05u); // Activate lanes 0 and 2.
+    writeLanes(vm.registers_, 2, {1, 2, 3, 4});
+    writeLanes(vm.registers_, 3, {10, 20, 30, 40});
+    for (size_t byte = 0; byte < 16; ++byte)
+        vm.registers_.WriteVectorByte(1, byte, 0xAAu);
+    vm.registers_.WriteVectorByte(4, 0, 0x0Fu);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vadd.vv v1, v2, v3, v0.t\n"
+        "vmseq.vv v4, v2, v3, v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(readElement(vm.registers_, 1, 0, 1), 11u);
+    EXPECT_EQ(readElement(vm.registers_, 1, 1, 1), 0xAAu);
+    EXPECT_EQ(readElement(vm.registers_, 1, 2, 1), 33u);
+    EXPECT_EQ(readElement(vm.registers_, 1, 3, 1), 0xAAu);
+    for (size_t byte = 4; byte < 16; ++byte)
+        EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), 0xAAu);
+    vm.Step();
+    EXPECT_EQ(vm.registers_.ReadVectorByte(4, 0), 0x0Fu); // Both active lanes compare false.
+    // Inactive comparison bits are not modified; lane 1 and lane 3 remain set.
+}
+
+TEST(VectorExtension, MaskedReductionAndPopulationCountUseV0Predicate)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 4);
+    vm.registers_.WriteVectorByte(0, 0, 0x05u); // Activate lanes 0 and 2.
+    vm.registers_.WriteVectorByte(10, 0, 0x0Du); // Source mask has lanes 0, 2, and 3 set.
+    writeLanes(vm.registers_, 2, {1, 2, 3, 4});
+    writeElement(vm.registers_, 3, 0, 1, 10);
+    for (size_t byte = 0; byte < 16; ++byte)
+        vm.registers_.WriteVectorByte(4, byte, 0xAAu);
+    vm.registers_.WriteGpr(9, 77);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vredsum.vs v4, v2, v3, v0.t\n"
+        "vcpop.m x9, v10, v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(readElement(vm.registers_, 4, 0, 1), 14u);
+    EXPECT_EQ(readElement(vm.registers_, 4, 1, 1), 0xAAu);
+    vm.Step();
+    EXPECT_EQ(vm.registers_.ReadGpr(9), 2u);
+}
+
+TEST(VectorExtension, MaskedVectorMemorySkipsInactiveLanesAndSupportsUndoRedo)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    constexpr uint64_t source_address = 0x3000;
+    constexpr uint64_t destination_address = 0x4000;
+    vm.registers_.WriteGpr(5, 4);
+    vm.registers_.WriteGpr(7, source_address);
+    vm.registers_.WriteGpr(8, destination_address);
+    vm.registers_.WriteVectorByte(0, 0, 0x05u);
+    for (size_t byte = 0; byte < 16; ++byte)
+    {
+        vm.registers_.WriteVectorByte(1, byte, 0xCCu);
+        vm.memory_controller_.writeByte(source_address + byte,
+                                        static_cast<uint8_t>(0x10u + byte));
+        vm.memory_controller_.writeByte(destination_address + byte,
+                                        static_cast<uint8_t>(0xA0u + byte));
+    }
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vle8.v v1, (x7), v0.t\n"
+        "vse8.v v1, (x8), v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(vm.registers_.ReadVectorByte(1, 0), 0x10u);
+    EXPECT_EQ(vm.registers_.ReadVectorByte(1, 1), 0xCCu);
+    EXPECT_EQ(vm.registers_.ReadVectorByte(1, 2), 0x12u);
+    EXPECT_EQ(vm.registers_.ReadVectorByte(1, 3), 0xCCu);
+    vm.Step();
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 0), 0x10u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 1), 0xA1u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 2), 0x12u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 3), 0xA3u);
+    vm.Undo();
+    for (size_t byte = 0; byte < 16; ++byte)
+        EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                  static_cast<uint8_t>(0xA0u + byte));
+    vm.Undo();
+    for (size_t byte = 0; byte < 16; ++byte)
+        EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), 0xCCu);
+    vm.Redo();
+    vm.Redo();
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 0), 0x10u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 1), 0xA1u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 2), 0x12u);
+    EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 3), 0xA3u);
+}
 TEST(VectorExtension, UnsupportedVtypeIsRejectedByAssembler)
 {
     EXPECT_THROW(assembleVectorSource("vsetvli x5, x6, 32\n"), std::runtime_error);
