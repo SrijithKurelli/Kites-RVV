@@ -27,6 +27,8 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
         {
             if (block.getOpcode() == "vsetvli")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
+            else if (block.getOpcode() == "vcpop.m")
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
             else if (block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
@@ -385,6 +387,12 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
                 code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | 0x57u;
             }
+            else if (block.getOpcode() == "vcpop.m")
+            {
+                const uint32_t vs2 = rs1;
+                code = (0b010000u << 26) | (1u << 25) | (vs2 << 20) |
+                       (0b10000u << 15) | (0b110u << 12) | (rd << 7) | 0x57u;
+            }
             else if (block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
             {
@@ -413,8 +421,15 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 const uint32_t vs1 = static_cast<uint32_t>(std::stoi(block.getRs2().substr(1)));
                 const uint32_t vs2 = rs1;
                 uint32_t funct6 = 0;
+                uint32_t funct3 = 0b000;
                 const std::string &mnemonic = block.getOpcode();
-                if (mnemonic == "vadd.vv") funct6 = 0b000000;
+                if (mnemonic == "vredsum.vs") { funct6 = 0b000000; funct3 = 0b010; }
+                else if (mnemonic == "vredand.vs") { funct6 = 0b000001; funct3 = 0b010; }
+                else if (mnemonic == "vredor.vs") { funct6 = 0b000010; funct3 = 0b010; }
+                else if (mnemonic == "vredxor.vs") { funct6 = 0b000011; funct3 = 0b010; }
+                else if (mnemonic == "vredmin.vs") { funct6 = 0b000101; funct3 = 0b010; }
+                else if (mnemonic == "vredmax.vs") { funct6 = 0b000111; funct3 = 0b010; }
+                else if (mnemonic == "vadd.vv") funct6 = 0b000000;
                 else if (mnemonic == "vsub.vv") funct6 = 0b000010;
                 else if (mnemonic == "vand.vv") funct6 = 0b001001;
                 else if (mnemonic == "vor.vv") funct6 = 0b001010;
@@ -425,7 +440,7 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 else if (mnemonic == "vmslt.vv") funct6 = 0b011011;
                 else throw std::runtime_error("Unsupported vector-vector instruction: " + mnemonic);
                 code = (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) |
-                       (0u << 12) | (rd << 7) | 0x57u;
+                       (funct3 << 12) | (rd << 7) | 0x57u;
             }
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
