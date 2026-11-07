@@ -1,0 +1,40 @@
+name: Bootstrap Kites upstream and apply RVV milestone
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rvv/milestone-1
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: ${{ !contains(github.event.head_commit.message || '', '[bootstrap-complete]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out working branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Import upstream source and apply the RVV patch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git clone --depth 1 https://github.com/hghit-harshit/Kites.git /tmp/kites-upstream
+          rsync -a --exclude='.git' /tmp/kites-upstream/ "${GITHUB_WORKSPACE}/"
+
+          base64 --decode rvv-milestone-1.patch.gz.b64 | gzip --decompress > /tmp/rvv-milestone-1.patch
+          git apply --check /tmp/rvv-milestone-1.patch
+          git apply /tmp/rvv-milestone-1.patch
+          rm rvv-milestone-1.patch.gz.b64
+
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Import Kites upstream and apply RVV milestone 1 [bootstrap-complete]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
