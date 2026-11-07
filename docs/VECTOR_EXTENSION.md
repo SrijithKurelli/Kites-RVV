@@ -26,8 +26,8 @@ For this subset, the architectural AVL special cases are implemented:
 
 - `rs1=x0`, `rd!=x0`: AVL is the maximum unsigned value, so `vl=VLMAX`.
 - `rs1=x0`, `rd=x0`: the current `vl` is reused and preserved. The subset
-  rejects this reserved form if the requested configuration would make the new
-  `VLMAX` smaller than the current `vl`.
+  rejects this reserved form whenever the new configuration reduces the previous
+  `VLMAX`, even if the old `vl` would still fit in the smaller vector length.
 - Otherwise AVL is read from `x[rs1]`.
 
 When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
