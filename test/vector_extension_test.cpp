@@ -88,6 +88,8 @@ TEST(VectorExtension, AssemblerEncodesUnitStrideVectorLoadsAndStores)
     EXPECT_EQ(program.text_buffer[5], 0x020350A7u);
     EXPECT_EQ(program.text_buffer[6], 0x020360A7u);
     EXPECT_EQ(program.text_buffer[7], 0x020370A7u);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]), "vle8.v v1, (x5)");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[7]), "vse64.v v1, (x6)");
 }
 
 TEST(VectorExtension, VectorUnitStrideMemoryWorksForEverySupportedSew)
