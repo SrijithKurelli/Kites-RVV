@@ -371,4 +371,3 @@ TEST(VectorExtension, UnsupportedVtypeIsRejectedByAssembler)
     EXPECT_THROW(assembleVectorSource("vsetvli x5, x6, 32\n"), std::runtime_error);
 }
 
-} // namespace
