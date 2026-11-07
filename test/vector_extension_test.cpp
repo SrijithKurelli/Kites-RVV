@@ -71,14 +71,14 @@ TEST(VectorExtension, AssemblerEncodesVsetvliAndVectorArithmetic)
 TEST(VectorExtension, AssemblerEncodesUnitStrideVectorLoadsAndStores)
 {
     auto program = assembleVectorSource(
-        "vle8.v v1, (x5)\\n"
-        "vle16.v v1, (x5)\\n"
-        "vle32.v v1, (x5)\\n"
-        "vle64.v v1, (x5)\\n"
-        "vse8.v v1, (x6)\\n"
-        "vse16.v v1, (x6)\\n"
-        "vse32.v v1, (x6)\\n"
-        "vse64.v v1, (x6)\\n");
+        "vle8.v v1, (x5)\n"
+        "vle16.v v1, (x5)\n"
+        "vle32.v v1, (x5)\n"
+        "vle64.v v1, (x5)\n"
+        "vse8.v v1, (x6)\n"
+        "vse16.v v1, (x6)\n"
+        "vse32.v v1, (x6)\n"
+        "vse64.v v1, (x6)\n");
     ASSERT_EQ(program.text_buffer.size(), 8u);
     EXPECT_EQ(program.text_buffer[0], 0x02028087u);
     EXPECT_EQ(program.text_buffer[1], 0x0202D087u);
@@ -129,9 +129,9 @@ TEST(VectorExtension, VectorUnitStrideMemoryWorksForEverySupportedSew)
         }
 
         const std::string source =
-            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n" +
-            std::string(test_case.load_mnemonic) + " v1, (x7)\\n" +
-            std::string(test_case.store_mnemonic) + " v1, (x8)\\n";
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n" +
+            std::string(test_case.load_mnemonic) + " v1, (x7)\n" +
+            std::string(test_case.store_mnemonic) + " v1, (x8)\n";
         vm.LoadProgram(assembleVectorSource(source));
         vm.Step(); // vsetvli
         vm.Step(); // vle*.v
@@ -178,8 +178,8 @@ TEST(VectorExtension, VectorMemoryRejectsMismatchedEew)
     vm.registers_.WriteGpr(5, 1);
     vm.registers_.WriteGpr(7, 0x1000);
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 0\\n" // SEW=8
-        "vle16.v v1, (x7)\\n"));
+        "vsetvli x6, x5, 0\n" // SEW=8
+        "vle16.v v1, (x7)\n"));
     vm.Step();
     EXPECT_THROW(vm.Step(), std::runtime_error);
     EXPECT_EQ(vm.registers_.ReadVectorByte(1, 0), 0u);
