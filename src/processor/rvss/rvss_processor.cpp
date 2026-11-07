@@ -439,10 +439,14 @@ void RVSSProcessor::ExecuteVector()
                 avl = UINT64_MAX;
             else
             {
+                // The rd=x0, rs1=x0 form preserves the current vl. It is
+                // reserved if the new vtype reduces VLMAX, even when the old
+                // vl would still fit in the smaller vector length.
+                const uint8_t old_vlmax = static_cast<uint8_t>(128u / vector_sew_);
                 avl = vector_vl_;
-                if (avl > vlmax)
+                if (vlmax < old_vlmax)
                     throw std::runtime_error(
-                        "vsetvli x0, x0 would reduce VLMAX below the current vl (reserved form)");
+                        "vsetvli x0, x0 must not reduce VLMAX (reserved form)");
             }
         }
         else
