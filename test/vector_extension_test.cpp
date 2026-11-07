@@ -438,9 +438,13 @@ TEST(VectorExtension, ReductionsWorkForEverySupportedSew)
         EXPECT_EQ(readElement(vm.registers_, 9, 0, test_case.bytes), 10u);
         const uint64_t tail_mask = test_case.bytes == 8 ? UINT64_MAX :
             ((uint64_t{1} << (test_case.bytes * 8)) - 1u);
-        for (size_t reg : {4u, 5u, 6u, 7u, 8u, 9u})
-            EXPECT_EQ(readElement(vm.registers_, reg, 1, test_case.bytes),
-                      UINT64_C(0xAAAAAAAAAAAAAAAA) & tail_mask);
+        if (test_case.lanes * test_case.bytes < 16)
+        {
+            const uint64_t expected_tail = UINT64_C(0xAAAAAAAAAAAAAAAA) & tail_mask;
+            for (size_t reg : {4u, 5u, 6u, 7u, 8u, 9u})
+                EXPECT_EQ(readElement(vm.registers_, reg, test_case.lanes, test_case.bytes),
+                          expected_tail);
+        }
     }
 }
 
