@@ -1,6 +1,7 @@
 name: Bootstrap Kites upstream and apply RVV milestone
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - rvv/milestone-1
@@ -10,7 +11,7 @@ permissions:
 
 jobs:
   bootstrap:
-    if: ${{ !contains(github.event.head_commit.message, '[bootstrap-complete]') }}
+    if: ${{ !contains(github.event.head_commit.message || '', '[bootstrap-complete]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
