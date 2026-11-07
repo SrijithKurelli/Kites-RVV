@@ -378,6 +378,8 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
     "vsetvli", "vadd.vv", "vsub.vv", "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
+    "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
+    "vcpop.m",
     "vle8.v", "vle16.v", "vle32.v", "vle64.v",
     "vse8.v", "vse16.v", "vse32.v", "vse64.v"
 
@@ -947,6 +949,13 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vmsne.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmsltu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmslt.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredsum.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredand.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredor.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredxor.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredmin.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vredmax.vs", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vcpop.m", {SyntaxType::O_GPR_C_VEC}},
     {"vle8.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vle16.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
@@ -1122,6 +1131,8 @@ bool isValidVectorInstruction(const std::string &instruction)
     static const std::unordered_set<std::string> vector_instructions = {
         "vsetvli", "vadd.vv", "vsub.vv", "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
+        "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
+        "vcpop.m",
         "vle8.v", "vle16.v", "vle32.v", "vle64.v",
         "vse8.v", "vse16.v", "vse32.v", "vse64.v"
     };
@@ -1323,6 +1334,7 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {SyntaxType::O_VEC_C_VEC_C_VEC, "<vec-reg>, <vec-reg>, <vec-reg>"},
         {SyntaxType::O_GPR_C_GPR_C_VTYPEI, "<gp-reg>, <gp-reg>, <vtypei>"},
         {SyntaxType::O_VEC_C_LP_GPR_RP, "<vec-reg>, (<gp-reg>)"},
+        {SyntaxType::O_GPR_C_VEC, "<gp-reg>, <vec-reg>"},
     };
 
     std::string syntaxes;
@@ -1459,7 +1471,23 @@ std::string disassemble(uint32_t instruction)
             case 0b011011: return "vmslt.vv " + operands;
             default: break;
             }
+        }        if (funct3 == 0b010 && ((instruction >> 25) & 1u))
+        {
+            const std::string operands = vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
+            switch (funct6)
+            {
+            case 0b000000: return "vredsum.vs " + operands;
+            case 0b000001: return "vredand.vs " + operands;
+            case 0b000010: return "vredor.vs " + operands;
+            case 0b000011: return "vredxor.vs " + operands;
+            case 0b000101: return "vredmin.vs " + operands;
+            case 0b000111: return "vredmax.vs " + operands;
+            default: break;
+            }
         }
+        if (funct3 == 0b110 && ((instruction >> 25) & 1u) &&
+            funct6 == 0b010000 && rs1 == 0b10000)
+            return "vcpop.m " + xr(rd) + ", " + vr(rs2);
         return "<unknown-vector>";
     }
 

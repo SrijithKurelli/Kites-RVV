@@ -450,7 +450,8 @@ enum class SyntaxType
                          ///< ) rparen
     O_VEC_C_VEC_C_VEC,   ///< Opcode vector-register, vector-register, vector-register
     O_GPR_C_GPR_C_VTYPEI, ///< Opcode GPR, GPR, vector type immediate
-    O_VEC_C_LP_GPR_RP    ///< Opcode vector-register, (general-purpose base register)
+    O_VEC_C_LP_GPR_RP,   ///< Opcode vector-register, (general-purpose base register)
+    O_GPR_C_VEC          ///< Opcode general-purpose register, vector register
 };
 
 extern std::unordered_map<std::string, RTypeInstructionEncoding> R_type_instruction_encoding_map;

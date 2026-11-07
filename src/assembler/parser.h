@@ -172,6 +172,7 @@ class Parser
     bool parse_O_VEC_C_VEC_C_VEC();
     bool parse_O_VEC_C_LP_GPR_RP();
     bool parse_O_GPR_C_GPR_C_VTYPEI();
+    bool parse_O_GPR_C_VEC();
 
     /**
      * @brief Parses a data directive.
