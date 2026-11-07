@@ -674,10 +674,14 @@ TEST(VectorExtension, ComparisonsProducePackedMaskBitsForEverySupportedSew)
         writeElement(vm.registers_, 3, 0, test_case.bytes, 1);
         writeElement(vm.registers_, 2, 1, test_case.bytes, 3);
         writeElement(vm.registers_, 3, 1, test_case.bytes, 3);
-        writeElement(vm.registers_, 2, 2, test_case.bytes, 2);
-        writeElement(vm.registers_, 3, 2, test_case.bytes, 4);
-        writeElement(vm.registers_, 2, 3, test_case.bytes, 5);
-        writeElement(vm.registers_, 3, 3, test_case.bytes, 4);
+        // SEW=64 has VLMAX=2 for VLEN=128, so lanes 2 and 3 do not exist.
+        if (test_case.active_lanes > 2)
+        {
+            writeElement(vm.registers_, 2, 2, test_case.bytes, 2);
+            writeElement(vm.registers_, 3, 2, test_case.bytes, 4);
+            writeElement(vm.registers_, 2, 3, test_case.bytes, 5);
+            writeElement(vm.registers_, 3, 3, test_case.bytes, 4);
+        }
         for (size_t reg : {5u, 6u, 7u, 8u})
             vm.registers_.WriteVectorByte(reg, 0, 0xF0u);
         vm.LoadProgram(assembleVectorSource(

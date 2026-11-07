@@ -65,8 +65,8 @@ trailing `, v0.t` mask operand; masked-off predicate bits are left unchanged. Pr
 - `vmsltu.vv vd, vs2, vs1` — unsigned less-than
 
 The comparisons use the configured SEW. Active predicate bits are updated; other bits
-remain unchanged. These mask-producing instructions are the basis for the next masking
-milestone. Masked execution (`v0.t`) is not implemented yet.
+remain unchanged. A comparison result can be used as the predicate register `v0` for
+subsequent masked instructions, or counted with `vcpop.m`.
 ### Vector-wide integer reductions
 
 The following reductions accept an optional trailing `, v0.t` mask operand. They use `vs1[0]` as the initial accumulator, fold
@@ -113,7 +113,7 @@ not supported.
 - Arithmetic, logical, comparison, reduction, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
-- Average computation remains an assembly-level recipe to complete after the mask/count path is in place; strided memory, pipeline, and several RVV operations remain unimplemented.
+- An end-to-end average example and its rounding/zero-count behavior remain to be completed. Strided memory, pipeline support, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 
@@ -137,8 +137,8 @@ vle8.v  v2, (x6)
 vmsltu.vv v3, v1, v2   # v3 contains packed predicate bits
 ```
 
-The comparison result is a bit-packed mask vector; the current milestone does not yet
-consume it as a predication mask.
+The comparison result is a bit-packed mask vector. To use it for predication, write the
+comparison result to `v0` and append `, v0.t` to a supported vector operation.
 
 ## Tests
 
