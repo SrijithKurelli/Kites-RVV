@@ -1455,38 +1455,39 @@ std::string disassemble(uint32_t instruction)
             return "vsetvli " + xr(rd) + ", " + xr(rs1) + ", " + std::to_string(zimm);
         }
         const uint8_t funct6 = (instruction >> 26) & 0x3F;
-        if (funct3 == 0 && ((instruction >> 25) & 1u))
+        const bool vm = ((instruction >> 25) & 1u) != 0;
+        const std::string operands = vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
+        const std::string mask_suffix = vm ? "" : ", v0.t";
+        if (funct3 == 0)
         {
-            const std::string operands = vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
             switch (funct6)
             {
-            case 0b000000: return "vadd.vv " + operands;
-            case 0b000010: return "vsub.vv " + operands;
-            case 0b001001: return "vand.vv " + operands;
-            case 0b001010: return "vor.vv " + operands;
-            case 0b001011: return "vxor.vv " + operands;
-            case 0b011000: return "vmseq.vv " + operands;
-            case 0b011001: return "vmsne.vv " + operands;
-            case 0b011010: return "vmsltu.vv " + operands;
-            case 0b011011: return "vmslt.vv " + operands;
-            default: break;
-            }
-        }        if (funct3 == 0b010 && ((instruction >> 25) & 1u))
-        {
-            const std::string operands = vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
-            switch (funct6)
-            {
-            case 0b000000: return "vredsum.vs " + operands;
-            case 0b000001: return "vredand.vs " + operands;
-            case 0b000010: return "vredor.vs " + operands;
-            case 0b000011: return "vredxor.vs " + operands;
-            case 0b000101: return "vredmin.vs " + operands;
-            case 0b000111: return "vredmax.vs " + operands;
+            case 0b000000: return "vadd.vv " + operands + mask_suffix;
+            case 0b000010: return "vsub.vv " + operands + mask_suffix;
+            case 0b001001: return "vand.vv " + operands + mask_suffix;
+            case 0b001010: return "vor.vv " + operands + mask_suffix;
+            case 0b001011: return "vxor.vv " + operands + mask_suffix;
+            case 0b011000: return "vmseq.vv " + operands + mask_suffix;
+            case 0b011001: return "vmsne.vv " + operands + mask_suffix;
+            case 0b011010: return "vmsltu.vv " + operands + mask_suffix;
+            case 0b011011: return "vmslt.vv " + operands + mask_suffix;
             default: break;
             }
         }
-        if (funct3 == 0b110 && ((instruction >> 25) & 1u) &&
-            funct6 == 0b010000 && rs1 == 0b10000)
+        if (funct3 == 0b010)
+        {
+            switch (funct6)
+            {
+            case 0b000000: return "vredsum.vs " + operands + mask_suffix;
+            case 0b000001: return "vredand.vs " + operands + mask_suffix;
+            case 0b000010: return "vredor.vs " + operands + mask_suffix;
+            case 0b000011: return "vredxor.vs " + operands + mask_suffix;
+            case 0b000101: return "vredmin.vs " + operands + mask_suffix;
+            case 0b000111: return "vredmax.vs " + operands + mask_suffix;
+            default: break;
+            }
+        }
+        if (funct3 == 0b110 && vm && funct6 == 0b010000 && rs1 == 0b10000)
             return "vcpop.m " + xr(rd) + ", " + vr(rs2);
         return "<unknown-vector>";
     }
@@ -1510,12 +1511,13 @@ std::string disassemble(uint32_t instruction)
             const bool mew = ((instruction >> 28) & 1u) != 0;
             const uint8_t mop = (instruction >> 26) & 0x3u;
             const uint8_t lumop_or_sumop = (instruction >> 20) & 0x1Fu;
-            if (!vm || nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+            if (nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
                 return "<unknown-vector-memory>";
 
             const std::string mnemonic = opcode == 0x07u ? "vle" : "vse";
+            const std::string mask_suffix = vm ? "" : ", v0.t";
             return mnemonic + std::to_string(element_width) + ".v " + vr(rd) +
-                   ", (" + xr(rs1) + ")";
+                   ", (" + xr(rs1) + ")" + mask_suffix;
         }
     }
 
