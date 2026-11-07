@@ -1189,6 +1189,11 @@ bool isDInstruction(const uint32_t &instruction)
         }
         break;
     }
+    case 0b1000011: // fmadd.d
+    case 0b1000111: // fmsub.d
+    case 0b1001011: // fnmsub.d
+    case 0b1001111: // fnmadd.d
+        return (funct7 & 0b11) == 0b01; // fmt = D
     default:
         break;
     }
