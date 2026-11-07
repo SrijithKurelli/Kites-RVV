@@ -918,9 +918,16 @@ void RVSSProcessor::WriteMemory()
         const uint8_t vector_register = (current_instruction_ >> 7) & 0x1Fu;
         const size_t element_bytes = vectorMemoryElementBytes(current_instruction_);
 
-        if (!vm || nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+        if (nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
             throw std::runtime_error(
-                "Only unmasked unit-stride one-field vector loads/stores are supported");
+                "Only unit-stride one-field vector loads/stores are supported");
+
+        const auto predicate_mask = vm ? std::array<uint8_t, 16>{}
+                                       : registers_.ReadVector(0);
+        const auto lane_is_active = [&](size_t lane)
+        {
+            return vm || ((predicate_mask[lane / 8] >> (lane % 8)) & 1u) != 0;
+        };
         if (element_bytes * 8 != vector_sew_)
             throw std::runtime_error(
                 "Vector memory EEW must match the currently configured SEW in this Kites subset");
@@ -935,6 +942,8 @@ void RVSSProcessor::WriteMemory()
 
             for (size_t lane = 0; lane < vector_vl_; ++lane)
             {
+                if (!lane_is_active(lane))
+                    continue;
                 const uint64_t value = readVectorMemoryElement(
                     memory_controller_, base_address + lane * element_bytes, element_bytes);
                 const size_t offset = lane * element_bytes;
@@ -965,6 +974,8 @@ void RVSSProcessor::WriteMemory()
 
             for (size_t lane = 0; lane < vector_vl_; ++lane)
             {
+                if (!lane_is_active(lane))
+                    continue;
                 uint64_t value = 0;
                 const size_t offset = lane * element_bytes;
                 for (size_t byte = 0; byte < element_bytes; ++byte)
