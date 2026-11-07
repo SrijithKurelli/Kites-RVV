@@ -931,8 +931,7 @@ void RVSSProcessor::WriteMemory()
             throw std::runtime_error(
                 "Only unit-stride one-field vector loads/stores are supported");
 
-        const auto predicate_mask = vm ? std::array<uint8_t, 16>{}
-                                       : registers_.ReadVector(0);
+        const auto predicate_mask = registers_.ReadVector(0);
         const auto lane_is_active = [&](size_t lane)
         {
             return vm || ((predicate_mask[lane / 8] >> (lane % 8)) & 1u) != 0;
