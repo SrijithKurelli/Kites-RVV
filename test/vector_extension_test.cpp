@@ -26,6 +26,25 @@ void writeLanes(Kites::RegisterFile &registers, size_t reg, const std::initializ
     for (uint8_t value : values)
         registers.WriteVectorByte(reg, byte++, value);
 }
+
+void writeElement(Kites::RegisterFile &registers, size_t reg, size_t lane,
+                  size_t element_bytes, uint64_t value)
+{
+    const size_t offset = lane * element_bytes;
+    for (size_t byte = 0; byte < element_bytes; ++byte)
+        registers.WriteVectorByte(reg, offset + byte,
+                                  static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu));
+}
+
+uint64_t readElement(const Kites::RegisterFile &registers, size_t reg,
+                     size_t lane, size_t element_bytes)
+{
+    const size_t offset = lane * element_bytes;
+    uint64_t value = 0;
+    for (size_t byte = 0; byte < element_bytes; ++byte)
+        value |= static_cast<uint64_t>(registers.ReadVectorByte(reg, offset + byte)) << (8 * byte);
+    return value;
+}
 }
 
 TEST(VectorExtension, RegisterFileStoresAndResets128Bits)
@@ -147,6 +166,69 @@ TEST(VectorExtension, VsetvliComputesVlmaxForEverySupportedSew)
         vm.Step();
         EXPECT_EQ(vm.vector_vl_, test_case.vlmax);
     }
+}
+
+TEST(VectorExtension, ArithmeticWorksForEverySupportedSew)
+{
+    struct Case
+    {
+        int zimm;
+        size_t element_bytes;
+        uint64_t lhs;
+        uint64_t rhs;
+        uint64_t sum;
+        uint64_t difference;
+    };
+    const Case cases[] = {
+        {0, 1, 0xFEULL, 5ULL, 3ULL, 0xF9ULL},
+        {8, 2, 0xFFFEULL, 5ULL, 3ULL, 0xFFF9ULL},
+        {16, 4, 0xFFFFFFFEULL, 5ULL, 3ULL, 0xFFFFFFF9ULL},
+        {24, 8, 0xFFFFFFFFFFFFFFFEULL, 5ULL, 3ULL, 0xFFFFFFFFFFFFFFF9ULL},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 2);
+        writeElement(vm.registers_, 2, 0, test_case.element_bytes, test_case.lhs);
+        writeElement(vm.registers_, 3, 0, test_case.element_bytes, test_case.rhs);
+        writeElement(vm.registers_, 2, 1, test_case.element_bytes, test_case.rhs);
+        writeElement(vm.registers_, 3, 1, test_case.element_bytes, test_case.lhs);
+
+        const std::string source =
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n"
+            "vadd.vv v1, v2, v3\\n"
+            "vsub.vv v4, v2, v3\\n";
+        vm.LoadProgram(assembleVectorSource(source));
+        vm.Step();
+        vm.Step();
+        vm.Step();
+
+        EXPECT_EQ(readElement(vm.registers_, 1, 0, test_case.element_bytes), test_case.sum);
+        EXPECT_EQ(readElement(vm.registers_, 4, 0, test_case.element_bytes),
+                  test_case.difference);
+        EXPECT_EQ(readElement(vm.registers_, 1, 1, test_case.element_bytes), test_case.sum);
+        EXPECT_EQ(readElement(vm.registers_, 4, 1, test_case.element_bytes),
+                  (test_case.rhs - test_case.lhs));
+    }
+}
+
+TEST(VectorExtension, X0AvlFormRejectsAnyVLMAXReduction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 4);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\\n"  // SEW=8, VLMAX=16, VL=4
+        "vsetvli x0, x0, 8\\n" // SEW=16, VLMAX=8: reduction is reserved even though VL fits
+        ""));
+    vm.Step();
+    ASSERT_EQ(vm.vector_vl_, 4u);
+    ASSERT_EQ(vm.vector_sew_, 8u);
+    EXPECT_THROW(vm.Step(), std::runtime_error);
+    EXPECT_EQ(vm.vector_vl_, 4u);
+    EXPECT_EQ(vm.vector_sew_, 8u);
 }
 
 TEST(VectorExtension, ReservedX0AvlFormDoesNotPartiallyChangeConfiguration)
