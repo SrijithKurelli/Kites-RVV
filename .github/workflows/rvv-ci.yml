@@ -1,0 +1,64 @@
+name: RVV build and test
+
+on:
+  push:
+    branches:
+      - rvv/milestone-1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rvv-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-qt-tests:
+    name: Linux / Qt 6.9.2 / GCC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.9.2
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+          install-deps: true
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version
+          ninja --version
+          g++ --version
+          test -f "${QT_ROOT_DIR}/lib/cmake/Qt6/Qt6Config.cmake"
+          echo "Using Qt at ${QT_ROOT_DIR}"
+
+      - name: Configure tests
+        run: >
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          -DENABLE_TESTS=ON
+          -DDISABLE_GUI=ON
+          -DVM_DEBUG_PRINTS=OFF
+
+      - name: Build CLI and test suite
+        run: cmake --build build/ci --target kites_cli kites_test --parallel 2
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build/ci --output-on-failure --parallel 2
