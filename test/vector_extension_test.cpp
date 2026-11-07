@@ -467,7 +467,7 @@ TEST(VectorExtension, ComparisonsProducePackedMaskBitsForEverySupportedSew)
         for (int step = 0; step < 5; ++step) vm.Step();
         const uint8_t active_bits = static_cast<uint8_t>((1u << test_case.active_lanes) - 1u);
         const uint8_t equal_mask = 0x02u;
-        const uint8_t not_equal_mask = test_case.active_lanes > 2 ? 0x05u : 0x01u;
+        const uint8_t not_equal_mask = test_case.active_lanes > 2 ? 0x0Du : 0x01u;
         const uint8_t signed_less_mask = test_case.active_lanes > 2 ? 0x05u : 0x01u;
         const uint8_t unsigned_less_mask = test_case.active_lanes > 2 ? 0x04u : 0x00u;
         EXPECT_EQ(vm.registers_.ReadVectorByte(5, 0), static_cast<uint8_t>(0xF0u | (equal_mask & active_bits)));
