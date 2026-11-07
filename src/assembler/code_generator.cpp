@@ -26,9 +26,12 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
         if (instruction_set::isValidVectorInstruction(block.getOpcode()))
         {
             if (block.getOpcode() == "vsetvli")
-                code = block.getOpcode() + " " + block.getRd() + " " + block.getRs1() + " " + block.getImm();
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
+            else if (block.getOpcode().rfind("vle", 0) == 0 ||
+                     block.getOpcode().rfind("vse", 0) == 0)
+                code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
             else
-                code = block.getOpcode() + " " + block.getRd() + " " + block.getRs1() + " " + block.getRs2();
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getRs2();
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
         {
@@ -375,13 +378,33 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
         uint32_t code;
         if (instruction_set::isValidVectorInstruction(block.getOpcode()))
         {
-            const uint32_t opcode = 0x57;
             const uint32_t rd = static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
             const uint32_t rs1 = static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
             if (block.getOpcode() == "vsetvli")
             {
                 const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
-                code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | opcode;
+                code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | 0x57u;
+            }
+            else if (block.getOpcode().rfind("vle", 0) == 0 ||
+                     block.getOpcode().rfind("vse", 0) == 0)
+            {
+                const size_t dot = block.getOpcode().find('.');
+                const uint32_t element_width =
+                    static_cast<uint32_t>(std::stoul(block.getOpcode().substr(3, dot - 3)));
+                uint32_t width_encoding = 0;
+                switch (element_width)
+                {
+                case 8: width_encoding = 0b000; break;
+                case 16: width_encoding = 0b101; break;
+                case 32: width_encoding = 0b110; break;
+                case 64: width_encoding = 0b111; break;
+                default:
+                    throw std::runtime_error("Unsupported vector memory element width");
+                }
+                const uint32_t opcode = block.getOpcode().rfind("vle", 0) == 0 ? 0x07u : 0x27u;
+                // Unit-stride, unmasked, one-field vector memory operation:
+                // nf=0, mew=0, mop=00, vm=1, lumop/sumop=00000.
+                code = (1u << 25) | (rs1 << 15) | (width_encoding << 12) | (rd << 7) | opcode;
             }
             else
             {
@@ -391,7 +414,7 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 const uint32_t vs2 = rs1;
                 const uint32_t funct6 = block.getOpcode() == "vadd.vv" ? 0u : 0b000010u;
                 code = (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) |
-                       (0u << 12) | (rd << 7) | opcode;
+                       (0u << 12) | (rd << 7) | 0x57u;
             }
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))

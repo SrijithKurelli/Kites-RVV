@@ -68,6 +68,123 @@ TEST(VectorExtension, AssemblerEncodesVsetvliAndVectorArithmetic)
     EXPECT_EQ(program.text_buffer[2], 0x0A530257u);
 }
 
+TEST(VectorExtension, AssemblerEncodesUnitStrideVectorLoadsAndStores)
+{
+    auto program = assembleVectorSource(
+        "vle8.v v1, (x5)\\n"
+        "vle16.v v1, (x5)\\n"
+        "vle32.v v1, (x5)\\n"
+        "vle64.v v1, (x5)\\n"
+        "vse8.v v1, (x6)\\n"
+        "vse16.v v1, (x6)\\n"
+        "vse32.v v1, (x6)\\n"
+        "vse64.v v1, (x6)\\n");
+    ASSERT_EQ(program.text_buffer.size(), 8u);
+    EXPECT_EQ(program.text_buffer[0], 0x02028087u);
+    EXPECT_EQ(program.text_buffer[1], 0x0202D087u);
+    EXPECT_EQ(program.text_buffer[2], 0x0202E087u);
+    EXPECT_EQ(program.text_buffer[3], 0x0202F087u);
+    EXPECT_EQ(program.text_buffer[4], 0x020300A7u);
+    EXPECT_EQ(program.text_buffer[5], 0x020350A7u);
+    EXPECT_EQ(program.text_buffer[6], 0x020360A7u);
+    EXPECT_EQ(program.text_buffer[7], 0x020370A7u);
+}
+
+TEST(VectorExtension, VectorUnitStrideMemoryWorksForEverySupportedSew)
+{
+    struct Case
+    {
+        int zimm;
+        size_t element_bytes;
+        const char *load_mnemonic;
+        const char *store_mnemonic;
+    };
+    const Case cases[] = {
+        {0, 1, "vle8.v", "vse8.v"},
+        {8, 2, "vle16.v", "vse16.v"},
+        {16, 4, "vle32.v", "vse32.v"},
+        {24, 8, "vle64.v", "vse64.v"},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        constexpr uint64_t source_address = 0x1000;
+        constexpr uint64_t destination_address = 0x2000;
+        constexpr uint8_t kInitialVectorByte = 0xCC;
+        constexpr uint8_t kInitialMemoryByte = 0xA0;
+
+        vm.registers_.WriteGpr(5, 2); // Two active vector elements.
+        vm.registers_.WriteGpr(7, source_address);
+        vm.registers_.WriteGpr(8, destination_address);
+
+        for (size_t byte = 0; byte < 16; ++byte)
+        {
+            vm.registers_.WriteVectorByte(1, byte, kInitialVectorByte);
+            vm.memory_controller_.writeByte(source_address + byte,
+                                            static_cast<uint8_t>(byte + 1));
+            vm.memory_controller_.writeByte(destination_address + byte,
+                                            static_cast<uint8_t>(kInitialMemoryByte + byte));
+        }
+
+        const std::string source =
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n" +
+            std::string(test_case.load_mnemonic) + " v1, (x7)\\n" +
+            std::string(test_case.store_mnemonic) + " v1, (x8)\\n";
+        vm.LoadProgram(assembleVectorSource(source));
+        vm.Step(); // vsetvli
+        vm.Step(); // vle*.v
+
+        const size_t active_bytes = 2 * test_case.element_bytes;
+        for (size_t byte = 0; byte < active_bytes; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte),
+                      static_cast<uint8_t>(byte + 1));
+        for (size_t byte = active_bytes; byte < 16; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), kInitialVectorByte);
+
+        vm.Step(); // vse*.v
+        for (size_t byte = 0; byte < active_bytes; ++byte)
+            EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                      static_cast<uint8_t>(byte + 1));
+        for (size_t byte = active_bytes; byte < 16; ++byte)
+            EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                      static_cast<uint8_t>(kInitialMemoryByte + byte));
+
+        vm.Undo(); // Store undo restores previous memory.
+        for (size_t byte = 0; byte < 16; ++byte)
+            EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                      static_cast<uint8_t>(kInitialMemoryByte + byte));
+
+        vm.Undo(); // Load undo restores the original vector destination.
+        for (size_t byte = 0; byte < 16; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), kInitialVectorByte);
+
+        vm.Redo();
+        for (size_t byte = 0; byte < active_bytes; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte),
+                      static_cast<uint8_t>(byte + 1));
+        vm.Redo();
+        for (size_t byte = 0; byte < active_bytes; ++byte)
+            EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                      static_cast<uint8_t>(byte + 1));
+    }
+}
+
+TEST(VectorExtension, VectorMemoryRejectsMismatchedEew)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 1);
+    vm.registers_.WriteGpr(7, 0x1000);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\\n" // SEW=8
+        "vle16.v v1, (x7)\\n"));
+    vm.Step();
+    EXPECT_THROW(vm.Step(), std::runtime_error);
+    EXPECT_EQ(vm.registers_.ReadVectorByte(1, 0), 0u);
+}
+
 TEST(VectorExtension, VectorAddUsesCurrentVlAndSew)
 {
     Kites::setupVmStateDirectory();

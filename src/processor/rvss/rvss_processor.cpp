@@ -27,6 +27,54 @@
 
 namespace Kites
 {
+namespace
+{
+bool isVectorMemoryInstruction(uint32_t instruction)
+{
+    const uint8_t opcode = instruction & 0x7Fu;
+    const uint8_t width = (instruction >> 12) & 0x7u;
+    return (opcode == 0x07u || opcode == 0x27u) &&
+           (width == 0b000u || width == 0b101u || width == 0b110u || width == 0b111u);
+}
+
+size_t vectorMemoryElementBytes(uint32_t instruction)
+{
+    switch ((instruction >> 12) & 0x7u)
+    {
+    case 0b000: return 1;
+    case 0b101: return 2;
+    case 0b110: return 4;
+    case 0b111: return 8;
+    default: throw std::runtime_error("Unsupported vector memory element width");
+    }
+}
+
+uint64_t readVectorMemoryElement(MemoryController &memory, uint64_t address, size_t bytes)
+{
+    switch (bytes)
+    {
+    case 1: return memory.readByte(address);
+    case 2: return memory.readHalfWord(address);
+    case 4: return memory.readWord(address);
+    case 8: return memory.readDoubleWord(address);
+    default: throw std::runtime_error("Unsupported vector memory element width");
+    }
+}
+
+void writeVectorMemoryElement(MemoryController &memory, uint64_t address,
+                              size_t bytes, uint64_t value)
+{
+    switch (bytes)
+    {
+    case 1: memory.writeByte(address, static_cast<uint8_t>(value)); break;
+    case 2: memory.writeHalfWord(address, static_cast<uint16_t>(value)); break;
+    case 4: memory.writeWord(address, static_cast<uint32_t>(value)); break;
+    case 8: memory.writeDoubleWord(address, value); break;
+    default: throw std::runtime_error("Unsupported vector memory element width");
+    }
+}
+} // namespace
+
 RVSSProcessor::RVSSProcessor() : ProcessorBase()
 {
     DumpRegisters(globals::registers_dump_file_path, registers_);
@@ -190,6 +238,15 @@ void RVSSProcessor::Execute()
     if (opcode == 0b1010111)
     {
         ExecuteVector();
+        return;
+    }
+
+    // Unit-stride vector memory instructions use rs1 as a scalar base address.
+    // Their vector register fields must not pass through scalar GPR decoding.
+    if (isVectorMemoryInstruction(current_instruction_))
+    {
+        const uint8_t base_register = (current_instruction_ >> 15) & 0x1Fu;
+        execution_result_ = registers_.ReadGpr(base_register);
         return;
     }
 
@@ -742,7 +799,85 @@ void RVSSProcessor::WriteMemory()
 
     if (opcode == 0b1010111)
     {
-        return; // Vector execution has already updated its destination/state.
+        return; // Vector arithmetic/configuration already updated vector state.
+    }
+
+    if (isVectorMemoryInstruction(current_instruction_))
+    {
+        const bool is_load = opcode == 0x07u;
+        const bool vm = ((current_instruction_ >> 25) & 1u) != 0;
+        const uint8_t nf = (current_instruction_ >> 29) & 0x7u;
+        const bool mew = ((current_instruction_ >> 28) & 1u) != 0;
+        const uint8_t mop = (current_instruction_ >> 26) & 0x3u;
+        const uint8_t lumop_or_sumop = (current_instruction_ >> 20) & 0x1Fu;
+        const uint8_t base_register = (current_instruction_ >> 15) & 0x1Fu;
+        const uint8_t vector_register = (current_instruction_ >> 7) & 0x1Fu;
+        const size_t element_bytes = vectorMemoryElementBytes(current_instruction_);
+
+        if (!vm || nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+            throw std::runtime_error(
+                "Only unmasked unit-stride one-field vector loads/stores are supported");
+        if (element_bytes * 8 != vector_sew_)
+            throw std::runtime_error(
+                "Vector memory EEW must match the currently configured SEW in this Kites subset");
+
+        const uint64_t base_address = registers_.ReadGpr(base_register);
+        const size_t transferred_bytes = static_cast<size_t>(vector_vl_) * element_bytes;
+
+        if (is_load)
+        {
+            const auto old_destination = registers_.ReadVector(vector_register);
+            auto new_destination = old_destination; // inactive tail elements remain unchanged
+
+            for (size_t lane = 0; lane < vector_vl_; ++lane)
+            {
+                const uint64_t value = readVectorMemoryElement(
+                    memory_controller_, base_address + lane * element_bytes, element_bytes);
+                const size_t offset = lane * element_bytes;
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    new_destination[offset + byte] =
+                        static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
+            }
+
+            registers_.WriteVector(vector_register, new_destination);
+            if (old_destination != new_destination)
+            {
+                RegisterChange change{vector_register, 3, 0, 0};
+                change.old_vector_value = old_destination;
+                change.new_vector_value = new_destination;
+                current_delta_.register_changes.push_back(change);
+            }
+        }
+        else
+        {
+            const auto source = registers_.ReadVector(vector_register);
+            std::vector<uint8_t> old_bytes;
+            std::vector<uint8_t> new_bytes;
+            old_bytes.reserve(transferred_bytes);
+            new_bytes.reserve(transferred_bytes);
+
+            for (size_t byte = 0; byte < transferred_bytes; ++byte)
+                old_bytes.push_back(memory_controller_.peekByte(base_address + byte));
+
+            for (size_t lane = 0; lane < vector_vl_; ++lane)
+            {
+                uint64_t value = 0;
+                const size_t offset = lane * element_bytes;
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    value |= static_cast<uint64_t>(source[offset + byte]) << (8 * byte);
+
+                writeVectorMemoryElement(memory_controller_,
+                                         base_address + offset, element_bytes, value);
+            }
+
+            for (size_t byte = 0; byte < transferred_bytes; ++byte)
+                new_bytes.push_back(memory_controller_.peekByte(base_address + byte));
+
+            if (old_bytes != new_bytes)
+                current_delta_.memory_changes.push_back(
+                    {base_address, old_bytes, new_bytes});
+        }
+        return;
     }
 
     if (instruction_set::isFInstruction(current_instruction_))
@@ -950,9 +1085,9 @@ void RVSSProcessor::WriteBack()
         return;
     }
 
-    if (opcode == 0b1010111)
+    if (opcode == 0b1010111 || isVectorMemoryInstruction(current_instruction_))
     {
-        return; // Vector execution has already updated its destination/state.
+        return; // Vector instructions have already updated vector state or memory.
     }
 
     if (instruction_set::isFInstruction(current_instruction_))

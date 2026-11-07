@@ -486,6 +486,10 @@ void Parser::parseTextDirective()
                     valid_syntax = parse_O_VEC_C_VEC_C_VEC();
                     break;
 
+                case instruction_set::SyntaxType::O_VEC_C_LP_GPR_RP:
+                    valid_syntax = parse_O_VEC_C_LP_GPR_RP();
+                    break;
+
                 case instruction_set::SyntaxType::O_GPR_C_GPR_C_VTYPEI:
                     valid_syntax = parse_O_GPR_C_GPR_C_VTYPEI();
                     break;

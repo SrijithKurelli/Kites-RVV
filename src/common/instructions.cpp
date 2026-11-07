@@ -376,7 +376,9 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vsub.vv"
+    "vsetvli", "vadd.vv", "vsub.vv",
+    "vle8.v", "vle16.v", "vle32.v", "vle64.v",
+    "vse8.v", "vse16.v", "vse32.v", "vse64.v"
 
 };
 
@@ -937,6 +939,14 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_VTYPEI}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vle8.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vle16.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vle64.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vse8.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vse16.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vse64.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
 
     {"fmadd.d", {SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR_C_RM}},
     {"fmsub.d", {SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR_C_RM}},
@@ -1101,7 +1111,12 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 
 bool isValidVectorInstruction(const std::string &instruction)
 {
-    return instruction == "vsetvli" || instruction == "vadd.vv" || instruction == "vsub.vv";
+    static const std::unordered_set<std::string> vector_instructions = {
+        "vsetvli", "vadd.vv", "vsub.vv",
+        "vle8.v", "vle16.v", "vle32.v", "vle64.v",
+        "vse8.v", "vse16.v", "vse32.v", "vse64.v"
+    };
+    return vector_instructions.find(instruction) != vector_instructions.end();
 }
 
 bool isFInstruction(const uint32_t &instruction)
@@ -1293,6 +1308,7 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {SyntaxType::O_FPR_C_I_LP_GPR_RP, "<fp-reg>, <imm>(<gp-reg>)"},
         {SyntaxType::O_VEC_C_VEC_C_VEC, "<vec-reg>, <vec-reg>, <vec-reg>"},
         {SyntaxType::O_GPR_C_GPR_C_VTYPEI, "<gp-reg>, <gp-reg>, <vtypei>"},
+        {SyntaxType::O_VEC_C_LP_GPR_RP, "<vec-reg>, (<gp-reg>)"},
     };
 
     std::string syntaxes;
