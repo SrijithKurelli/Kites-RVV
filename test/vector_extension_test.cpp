@@ -197,9 +197,9 @@ TEST(VectorExtension, ArithmeticWorksForEverySupportedSew)
         writeElement(vm.registers_, 3, 1, test_case.element_bytes, test_case.lhs);
 
         const std::string source =
-            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n"
-            "vadd.vv v1, v2, v3\\n"
-            "vsub.vv v4, v2, v3\\n";
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n"
+            "vadd.vv v1, v2, v3\n"
+            "vsub.vv v4, v2, v3\n";
         vm.LoadProgram(assembleVectorSource(source));
         vm.Step();
         vm.Step();
@@ -220,8 +220,8 @@ TEST(VectorExtension, X0AvlFormRejectsAnyVLMAXReduction)
     Kites::RVSSProcessor vm;
     vm.registers_.WriteGpr(5, 4);
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 0\\n"  // SEW=8, VLMAX=16, VL=4
-        "vsetvli x0, x0, 8\\n" // SEW=16, VLMAX=8: reduction is reserved even though VL fits
+        "vsetvli x6, x5, 0\n"  // SEW=8, VLMAX=16, VL=4
+        "vsetvli x0, x0, 8\n" // SEW=16, VLMAX=8: reduction is reserved even though VL fits
         ""));
     vm.Step();
     ASSERT_EQ(vm.vector_vl_, 4u);
