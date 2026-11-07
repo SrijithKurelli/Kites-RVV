@@ -412,7 +412,18 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 // stores vs2 in bits [24:20] and vs1 in bits [19:15].
                 const uint32_t vs1 = static_cast<uint32_t>(std::stoi(block.getRs2().substr(1)));
                 const uint32_t vs2 = rs1;
-                const uint32_t funct6 = block.getOpcode() == "vadd.vv" ? 0u : 0b000010u;
+                uint32_t funct6 = 0;
+                const std::string &mnemonic = block.getOpcode();
+                if (mnemonic == "vadd.vv") funct6 = 0b000000;
+                else if (mnemonic == "vsub.vv") funct6 = 0b000010;
+                else if (mnemonic == "vand.vv") funct6 = 0b001001;
+                else if (mnemonic == "vor.vv") funct6 = 0b001010;
+                else if (mnemonic == "vxor.vv") funct6 = 0b001011;
+                else if (mnemonic == "vmseq.vv") funct6 = 0b011000;
+                else if (mnemonic == "vmsne.vv") funct6 = 0b011001;
+                else if (mnemonic == "vmsltu.vv") funct6 = 0b011010;
+                else if (mnemonic == "vmslt.vv") funct6 = 0b011011;
+                else throw std::runtime_error("Unsupported vector-vector instruction: " + mnemonic);
                 code = (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) |
                        (0u << 12) | (rd << 7) | 0x57u;
             }

@@ -476,8 +476,6 @@ void RVSSProcessor::ExecuteVector()
     // vsetvli rd, rs1, zimm: configure SEW/LMUL and derive vl from the AVL rules.
     if (funct3 == 0b111)
     {
-        // vsetvli uses an 11-bit zimm in bits [30:20] with bit 31 clear.
-        // Encodings with bit 31 set (vsetivli/vsetvl) are unsupported here.
         if ((current_instruction_ & 0x80000000u) != 0)
             throw std::runtime_error("vsetivli and vsetvl are not supported; use vsetvli");
         const uint16_t zimm = static_cast<uint16_t>((current_instruction_ >> 20) & 0x7FFu);
@@ -486,9 +484,6 @@ void RVSSProcessor::ExecuteVector()
 
         const uint8_t new_sew = static_cast<uint8_t>(8u << ((zimm >> 3) & 0x7u));
         const uint8_t vlmax = static_cast<uint8_t>(128u / new_sew);
-        // RVV AVL rules: rs1=x0, rd!=x0 requests VLMAX. If both are x0,
-        // the current vl is reused; this is reserved if the new VLMAX is
-        // smaller than that current vl. Otherwise AVL comes from x[rs1].
         uint64_t avl = 0;
         if (rs1 == 0)
         {
@@ -496,14 +491,10 @@ void RVSSProcessor::ExecuteVector()
                 avl = UINT64_MAX;
             else
             {
-                // The rd=x0, rs1=x0 form preserves the current vl. It is
-                // reserved if the new vtype reduces VLMAX, even when the old
-                // vl would still fit in the smaller vector length.
                 const uint8_t old_vlmax = static_cast<uint8_t>(128u / vector_sew_);
                 avl = vector_vl_;
                 if (vlmax < old_vlmax)
-                    throw std::runtime_error(
-                        "vsetvli x0, x0 must not reduce VLMAX (reserved form)");
+                    throw std::runtime_error("vsetvli x0, x0 must not reduce VLMAX (reserved form)");
             }
         }
         else
@@ -528,31 +519,80 @@ void RVSSProcessor::ExecuteVector()
     const uint8_t vs1 = rs1;
     if (!vm)
         throw std::runtime_error("Masked vector operations are not supported in this milestone");
-    if (funct3 != 0b000 || (funct6 != 0b000000 && funct6 != 0b000010))
-        throw std::runtime_error("Unsupported vector arithmetic instruction");
+    if (funct3 != 0b000)
+        throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
+
+    const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
+    const bool arithmetic_or_logic =
+        funct6 == 0b000000 || funct6 == 0b000010 ||
+        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011;
+    if (!comparison && !arithmetic_or_logic)
+        throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
 
     const auto lhs = registers_.ReadVector(vs2);
     const auto rhs = registers_.ReadVector(vs1);
     auto result = registers_.ReadVector(vd);
     const auto old_destination = result;
     const size_t element_bytes = vector_sew_ / 8;
+    const uint64_t element_mask =
+        vector_sew_ == 64 ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
+
+    auto signedLess = [this](uint64_t a, uint64_t b)
+    {
+        const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1);
+        const bool a_negative = (a & sign_bit) != 0;
+        const bool b_negative = (b & sign_bit) != 0;
+        if (a_negative != b_negative)
+            return a_negative;
+        return a < b;
+    };
 
     for (size_t lane = 0; lane < vector_vl_; ++lane)
     {
+        const size_t offset = lane * element_bytes;
         uint64_t a = 0;
         uint64_t b = 0;
-        const size_t offset = lane * element_bytes;
         for (size_t byte = 0; byte < element_bytes; ++byte)
         {
             a |= static_cast<uint64_t>(lhs[offset + byte]) << (8 * byte);
             b |= static_cast<uint64_t>(rhs[offset + byte]) << (8 * byte);
         }
-        const uint64_t mask = vector_sew_ == 64 ? UINT64_MAX : ((1ULL << vector_sew_) - 1ULL);
-        const uint64_t value = funct6 == 0b000000 ? (a + b) & mask : (a - b) & mask;
-        for (size_t byte = 0; byte < element_bytes; ++byte)
-            result[offset + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
+
+        if (comparison)
+        {
+            bool predicate = false;
+            switch (funct6)
+            {
+            case 0b011000: predicate = (a == b); break; // vmseq.vv
+            case 0b011001: predicate = (a != b); break; // vmsne.vv
+            case 0b011010: predicate = (a < b); break;  // vmsltu.vv
+            case 0b011011: predicate = signedLess(a, b); break; // vmslt.vv
+            default: break;
+            }
+            const uint8_t bit = static_cast<uint8_t>(1u << (lane % 8));
+            if (predicate)
+                result[lane / 8] |= bit;
+            else
+                result[lane / 8] &= static_cast<uint8_t>(~bit);
+        }
+        else
+        {
+            uint64_t value = 0;
+            switch (funct6)
+            {
+            case 0b000000: value = (a + b) & element_mask; break; // vadd.vv
+            case 0b000010: value = (a - b) & element_mask; break; // vsub.vv
+            case 0b001001: value = a & b; break;                 // vand.vv
+            case 0b001010: value = a | b; break;                 // vor.vv
+            case 0b001011: value = a ^ b; break;                 // vxor.vv
+            default: break;
+            }
+            for (size_t byte = 0; byte < element_bytes; ++byte)
+                result[offset + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
+        }
     }
-    // Tail elements are undisturbed, as requested by the vtype policy in this subset.
+
+    // Data and mask destinations keep inactive/tail storage unchanged in this subset.
     registers_.WriteVector(vd, result);
     if (old_destination != result)
     {

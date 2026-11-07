@@ -376,7 +376,8 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vsub.vv",
+    "vsetvli", "vadd.vv", "vsub.vv", "vand.vv", "vor.vv", "vxor.vv",
+    "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vle8.v", "vle16.v", "vle32.v", "vle64.v",
     "vse8.v", "vse16.v", "vse32.v", "vse64.v"
 
@@ -939,6 +940,13 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_VTYPEI}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vxor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmseq.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsne.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmsltu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmslt.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vle8.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vle16.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vle32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
@@ -1112,7 +1120,8 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vadd.vv", "vsub.vv",
+        "vsetvli", "vadd.vv", "vsub.vv", "vand.vv", "vor.vv", "vxor.vv",
+        "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vle8.v", "vle16.v", "vle32.v", "vle64.v",
         "vse8.v", "vse16.v", "vse32.v", "vse64.v"
     };
@@ -1436,8 +1445,20 @@ std::string disassemble(uint32_t instruction)
         const uint8_t funct6 = (instruction >> 26) & 0x3F;
         if (funct3 == 0 && ((instruction >> 25) & 1u))
         {
-            if (funct6 == 0) return "vadd.vv " + vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
-            if (funct6 == 2) return "vsub.vv " + vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
+            const std::string operands = vr(rd) + ", " + vr(rs2) + ", " + vr(rs1);
+            switch (funct6)
+            {
+            case 0b000000: return "vadd.vv " + operands;
+            case 0b000010: return "vsub.vv " + operands;
+            case 0b001001: return "vand.vv " + operands;
+            case 0b001010: return "vor.vv " + operands;
+            case 0b001011: return "vxor.vv " + operands;
+            case 0b011000: return "vmseq.vv " + operands;
+            case 0b011001: return "vmsne.vv " + operands;
+            case 0b011010: return "vmsltu.vv " + operands;
+            case 0b011011: return "vmslt.vv " + operands;
+            default: break;
+            }
         }
         return "<unknown-vector>";
     }

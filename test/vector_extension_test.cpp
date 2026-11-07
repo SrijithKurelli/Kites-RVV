@@ -376,3 +376,105 @@ TEST(VectorExtension, UnsupportedVtypeIsRejectedByAssembler)
     EXPECT_THROW(assembleVectorSource("vsetvli x5, x6, 32\n"), std::runtime_error);
 }
 
+TEST(VectorExtension, AssemblerEncodesLogicalAndComparisonInstructions)
+{
+    const auto program = assembleVectorSource(
+        "vand.vv v1, v2, v3\n"
+        "vor.vv v4, v5, v6\n"
+        "vxor.vv v7, v8, v9\n"
+        "vmseq.vv v10, v11, v12\n"
+        "vmsne.vv v13, v14, v15\n"
+        "vmsltu.vv v16, v17, v18\n"
+        "vmslt.vv v19, v20, v21\n");
+    ASSERT_EQ(program.text_buffer.size(), 7u);
+    const auto encode = [](uint32_t funct6, uint32_t vd, uint32_t vs2, uint32_t vs1)
+    {
+        return (funct6 << 26) | (1u << 25) | (vs2 << 20) | (vs1 << 15) |
+               (vd << 7) | 0x57u;
+    };
+    EXPECT_EQ(program.text_buffer[0], encode(0b001001, 1, 2, 3));
+    EXPECT_EQ(program.text_buffer[1], encode(0b001010, 4, 5, 6));
+    EXPECT_EQ(program.text_buffer[2], encode(0b001011, 7, 8, 9));
+    EXPECT_EQ(program.text_buffer[3], encode(0b011000, 10, 11, 12));
+    EXPECT_EQ(program.text_buffer[4], encode(0b011001, 13, 14, 15));
+    EXPECT_EQ(program.text_buffer[5], encode(0b011010, 16, 17, 18));
+    EXPECT_EQ(program.text_buffer[6], encode(0b011011, 19, 20, 21));
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]), "vand.vv v1, v2, v3");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[6]), "vmslt.vv v19, v20, v21");
+}
+
+TEST(VectorExtension, LogicalOperationsWorkForEverySupportedSew)
+{
+    const struct Case { int zimm; size_t bytes; } cases[] = {
+        {0, 1}, {8, 2}, {16, 4}, {24, 8}
+    };
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 2);
+        const uint64_t mask =
+            test_case.bytes == 8 ? UINT64_MAX : ((uint64_t{1} << (test_case.bytes * 8)) - 1u);
+        const uint64_t a = 0xA55AA55AA55AA55AULL & mask;
+        const uint64_t b = 0x0FF00FF00FF00FF0ULL & mask;
+        writeElement(vm.registers_, 2, 0, test_case.bytes, a);
+        writeElement(vm.registers_, 3, 0, test_case.bytes, b);
+        writeElement(vm.registers_, 2, 1, test_case.bytes, b);
+        writeElement(vm.registers_, 3, 1, test_case.bytes, a);
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n"
+            "vand.vv v4, v2, v3\n"
+            "vor.vv v5, v2, v3\n"
+            "vxor.vv v6, v2, v3\n"));
+        vm.Step(); vm.Step(); vm.Step(); vm.Step();
+        EXPECT_EQ(readElement(vm.registers_, 4, 0, test_case.bytes), a & b);
+        EXPECT_EQ(readElement(vm.registers_, 5, 0, test_case.bytes), a | b);
+        EXPECT_EQ(readElement(vm.registers_, 6, 0, test_case.bytes), a ^ b);
+        EXPECT_EQ(readElement(vm.registers_, 4, 1, test_case.bytes), a & b);
+        EXPECT_EQ(readElement(vm.registers_, 5, 1, test_case.bytes), a | b);
+        EXPECT_EQ(readElement(vm.registers_, 6, 1, test_case.bytes), a ^ b);
+    }
+}
+
+TEST(VectorExtension, ComparisonsProducePackedMaskBitsForEverySupportedSew)
+{
+    const struct Case { int zimm; size_t bytes; size_t active_lanes; } cases[] = {
+        {0, 1, 4}, {8, 2, 4}, {16, 4, 4}, {24, 8, 2}
+    };
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 4);
+        const size_t width = test_case.bytes * 8;
+        const uint64_t sign_bit = uint64_t{1} << (width - 1);
+        writeElement(vm.registers_, 2, 0, test_case.bytes, sign_bit);
+        writeElement(vm.registers_, 3, 0, test_case.bytes, 1);
+        writeElement(vm.registers_, 2, 1, test_case.bytes, 3);
+        writeElement(vm.registers_, 3, 1, test_case.bytes, 3);
+        writeElement(vm.registers_, 2, 2, test_case.bytes, 2);
+        writeElement(vm.registers_, 3, 2, test_case.bytes, 4);
+        writeElement(vm.registers_, 2, 3, test_case.bytes, 5);
+        writeElement(vm.registers_, 3, 3, test_case.bytes, 4);
+        for (size_t reg : {5u, 6u, 7u, 8u})
+            vm.registers_.WriteVectorByte(reg, 0, 0xF0u);
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n"
+            "vmseq.vv v5, v2, v3\n"
+            "vmsne.vv v6, v2, v3\n"
+            "vmslt.vv v7, v2, v3\n"
+            "vmsltu.vv v8, v2, v3\n"));
+        for (int step = 0; step < 5; ++step) vm.Step();
+        const uint8_t active_bits = static_cast<uint8_t>((1u << test_case.active_lanes) - 1u);
+        const uint8_t equal_mask = 0x02u;
+        const uint8_t not_equal_mask = test_case.active_lanes > 2 ? 0x05u : 0x01u;
+        const uint8_t signed_less_mask = test_case.active_lanes > 2 ? 0x05u : 0x01u;
+        const uint8_t unsigned_less_mask = test_case.active_lanes > 2 ? 0x04u : 0x00u;
+        EXPECT_EQ(vm.registers_.ReadVectorByte(5, 0), static_cast<uint8_t>(0xF0u | (equal_mask & active_bits)));
+        EXPECT_EQ(vm.registers_.ReadVectorByte(6, 0), static_cast<uint8_t>(0xF0u | (not_equal_mask & active_bits)));
+        EXPECT_EQ(vm.registers_.ReadVectorByte(7, 0), static_cast<uint8_t>(0xF0u | (signed_less_mask & active_bits)));
+        EXPECT_EQ(vm.registers_.ReadVectorByte(8, 0), static_cast<uint8_t>(0xF0u | (unsigned_less_mask & active_bits)));
+    }
+}
+
+

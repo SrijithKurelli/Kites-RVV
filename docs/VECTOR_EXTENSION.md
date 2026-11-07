@@ -42,6 +42,28 @@ supports unmasked operations (`vm=1`) only. Elements beyond `vl` are preserved
 Vector instructions use the standard 32-bit instruction word layout for the
 implemented encodings. The assembly operand order is `vd, vs2, vs1`.
 
+### Logical vector-vector instructions
+
+The following unmasked operations apply bitwise to each active SEW-sized lane:
+
+- `vand.vv vd, vs2, vs1`
+- `vor.vv vd, vs2, vs1`
+- `vxor.vv vd, vs2, vs1`
+
+### Integer vector comparisons
+
+The following unmasked vector-vector comparisons compare corresponding signed or unsigned
+integer lanes and write one predicate bit per active lane into `vd`. Predicate bit
+`i` is stored at bit `i` of the destination vector register (packed across bytes):
+
+- `vmseq.vv vd, vs2, vs1` — equal
+- `vmsne.vv vd, vs2, vs1` — not equal
+- `vmslt.vv vd, vs2, vs1` — signed less-than
+- `vmsltu.vv vd, vs2, vs1` — unsigned less-than
+
+The comparisons use the configured SEW. Active predicate bits are updated; other bits
+remain unchanged. These mask-producing instructions are the basis for the next masking
+milestone. Masked execution (`v0.t`) is not implemented yet.
 ### Unit-stride vector memory instructions
 
 The assembler and RVSS processor support these unmasked forms:
@@ -64,7 +86,7 @@ not supported.
 - Vector instructions are implemented only in the RVSS single-cycle processor.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Vector arithmetic, loads, and stores support unmasked operations only.
+- Vector arithmetic, logical operations, comparisons, loads, and stores support unmasked operations only.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
 - Mask operations, vector comparisons, reductions, and other RVV instructions
@@ -83,7 +105,17 @@ vse8.v  v2, (x6)        # Store four result bytes.
 ```
 
 The source and destination addresses must refer to valid, initialized memory.
-The example uses matching EEW and SEW (8 bits).
+The example uses matching EEW and SEW (8 bits). A comparison-based example is:
+
+```asm
+vsetvli x8, x7, 0       # SEW=8, VL from x7
+vle8.v  v1, (x5)
+vle8.v  v2, (x6)
+vmsltu.vv v3, v1, v2   # v3 contains packed predicate bits
+```
+
+The comparison result is a bit-packed mask vector; the current milestone does not yet
+consume it as a predication mask.
 
 ## Tests
 
