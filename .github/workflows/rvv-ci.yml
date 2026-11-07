@@ -36,6 +36,11 @@ jobs:
           cache: true
           install-deps: true
 
+      - name: Install GoogleTest and GoogleMock sources
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtest-dev libgmock-dev
+
       - name: Verify toolchain
         shell: bash
         run: |
@@ -44,13 +49,16 @@ jobs:
           ninja --version
           g++ --version
           test -f "${QT_ROOT_DIR}/lib/cmake/Qt6/Qt6Config.cmake"
+          test -f /usr/src/googletest/CMakeLists.txt
           echo "Using Qt at ${QT_ROOT_DIR}"
+          echo "Using GoogleTest sources at /usr/src/googletest"
 
       - name: Configure tests
         run: >
           cmake -S . -B build/ci -G Ninja
           -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/usr/src/googletest
           -DENABLE_TESTS=ON
           -DDISABLE_GUI=ON
           -DVM_DEBUG_PRINTS=OFF
