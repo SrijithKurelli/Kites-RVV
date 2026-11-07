@@ -1437,6 +1437,34 @@ std::string disassemble(uint32_t instruction)
         return "<unknown-vector>";
     }
 
+    if (opcode == 0x07u || opcode == 0x27u)
+    {
+        uint32_t element_width = 0;
+        switch (funct3)
+        {
+        case 0b000: element_width = 8; break;
+        case 0b101: element_width = 16; break;
+        case 0b110: element_width = 32; break;
+        case 0b111: element_width = 64; break;
+        default: break; // FLW/FLD or a non-vector memory encoding.
+        }
+
+        if (element_width != 0)
+        {
+            const bool vm = ((instruction >> 25) & 1u) != 0;
+            const uint8_t nf = (instruction >> 29) & 0x7u;
+            const bool mew = ((instruction >> 28) & 1u) != 0;
+            const uint8_t mop = (instruction >> 26) & 0x3u;
+            const uint8_t lumop_or_sumop = (instruction >> 20) & 0x1Fu;
+            if (!vm || nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+                return "<unknown-vector-memory>";
+
+            const std::string mnemonic = opcode == 0x07u ? "vle" : "vse";
+            return mnemonic + std::to_string(element_width) + ".v " + vr(rd) +
+                   ", (" + xr(rs1) + ")";
+        }
+    }
+
     switch (opcode)
     {
 
