@@ -328,8 +328,13 @@ TEST(VectorExtension, ArithmeticWorksForEverySupportedSew)
         EXPECT_EQ(readElement(vm.registers_, 4, 0, test_case.element_bytes),
                   test_case.difference);
         EXPECT_EQ(readElement(vm.registers_, 1, 1, test_case.element_bytes), test_case.sum);
+        const uint64_t expected_reverse_difference =
+            test_case.element_bytes == sizeof(uint64_t)
+                ? test_case.rhs - test_case.lhs
+                : (test_case.rhs - test_case.lhs) &
+                      ((uint64_t{1} << (test_case.element_bytes * 8)) - 1);
         EXPECT_EQ(readElement(vm.registers_, 4, 1, test_case.element_bytes),
-                  (test_case.rhs - test_case.lhs));
+                  expected_reverse_difference);
     }
 }
 
