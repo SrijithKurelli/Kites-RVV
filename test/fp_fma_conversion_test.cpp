@@ -15,6 +15,7 @@
 #include <string>
 
 #include "assembler/assembler.h"
+#include "common/instructions.h"
 #include "processor/alu.h"
 #include "processor/rv5s/rv5s_processor_h_f.h"
 #include "processor/rv5s/rv5s_processor_h_nf.h"
@@ -93,6 +94,21 @@ using AllVms = ::testing::Types<Kites::RVSSProcessor, Kites::RV5StageProcessorHF
 TYPED_TEST_SUITE(FpFmaConversion, AllVms);
 
 } // namespace
+
+TEST(FpInstructionClassification, FmaFormatSelectsCorrectPrecision)
+{
+    const uint32_t fma_opcodes[] = {0b1000011u, 0b1000111u, 0b1001011u, 0b1001111u};
+    for (const uint32_t opcode : fma_opcodes)
+    {
+        const uint32_t single_precision = opcode;
+        const uint32_t double_precision = opcode | (0b01u << 25);
+
+        EXPECT_TRUE(Kites::instruction_set::isFInstruction(single_precision));
+        EXPECT_FALSE(Kites::instruction_set::isDInstruction(single_precision));
+        EXPECT_FALSE(Kites::instruction_set::isFInstruction(double_precision));
+        EXPECT_TRUE(Kites::instruction_set::isDInstruction(double_precision));
+    }
+}
 
 TYPED_TEST(FpFmaConversion, DoublePrecisionFma)
 {
