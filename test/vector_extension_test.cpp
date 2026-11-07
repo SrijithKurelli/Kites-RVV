@@ -514,7 +514,7 @@ TEST(VectorExtension, MaskedArithmeticAndComparisonsPreserveInactiveElements)
     for (size_t byte = 4; byte < 16; ++byte)
         EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), 0xAAu);
     vm.Step();
-    EXPECT_EQ(vm.registers_.ReadVectorByte(4, 0), 0x0Fu); // Both active lanes compare false.
+    EXPECT_EQ(vm.registers_.ReadVectorByte(4, 0), 0x0Au); // Active bits clear; inactive bits remain set.
     // Inactive comparison bits are not modified; lane 1 and lane 3 remain set.
 }
 
