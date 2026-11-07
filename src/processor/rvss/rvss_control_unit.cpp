@@ -14,9 +14,21 @@ namespace Kites
 void RVSSControlUnit::SetControlSignals(uint32_t instruction)
 {
     uint8_t opcode = instruction & 0b1111111;
+    const uint8_t funct3 = (instruction >> 12) & 0x7u;
 
     alu_src_ = mem_to_reg_ = reg_write_ = mem_read_ = mem_write_ = branch_ = false;
     alu_op_ = false;
+
+    // Vector loads/stores share the scalar floating-point memory opcodes,
+    // but write vector state directly and must not assert scalar GPR writeback.
+    const bool vector_memory_width =
+        funct3 == 0b000 || funct3 == 0b101 || funct3 == 0b110 || funct3 == 0b111;
+    if (vector_memory_width && (opcode == 0b0000111 || opcode == 0b0100111))
+    {
+        mem_read_ = opcode == 0b0000111;
+        mem_write_ = opcode == 0b0100111;
+        return;
+    }
 
     switch (opcode)
     {
