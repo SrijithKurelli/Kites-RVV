@@ -16,9 +16,9 @@ Last updated: 2026-11-07
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |
 | Signed / unsigned comparisons | Implemented subset | `vmslt.vv`, `vmsltu.vv`; signed boundary and unsigned comparison tests span all supported SEWs. |
 | Comparison masks | Partial | Predicate bits are packed by lane index in destination vector registers; execution-time use as `v0` predication remains. |
-| Reductions: sum, min, max | Not started | Reduction over active elements; destination placement and signedness tests. |
-| Reductions: AND, OR, XOR | Not started | Reduction over active elements. |
-| Count elements matching a condition | Not started | Consume comparison mask; write count to an integer register. |
+| Reductions: sum, min, max | Implemented subset | `vredsum.vs`, `vredmin.vs`, `vredmax.vs`; `vs1[0]` seed and `vd[0]` result; signed min/max. |
+| Reductions: AND, OR, XOR | Implemented | `vredand.vs`, `vredor.vs`, `vredxor.vs`; all supported SEWs covered by tests. |
+| Count elements matching a condition | Implemented subset | `vcpop.m rd, vs2` counts active set predicate bits and writes a GPR; comparison-to-count sequence tested. |
 | Average from sum and count | Not started | Define rounding behavior in tests; handle zero count explicitly. |
 | Masked execution | Not started | Masked arithmetic, memory and inactive-element policy. |
 | Inactive and tail element handling | Partial | Unmasked data operations preserve tail elements; comparisons update active packed bits and preserve other bits. Masked-off behavior remains. |

@@ -64,6 +64,26 @@ integer lanes and write one predicate bit per active lane into `vd`. Predicate b
 The comparisons use the configured SEW. Active predicate bits are updated; other bits
 remain unchanged. These mask-producing instructions are the basis for the next masking
 milestone. Masked execution (`v0.t`) is not implemented yet.
+### Vector-wide integer reductions
+
+The following unmasked reductions use `vs1[0]` as the initial accumulator, fold
+the active elements of `vs2` in lane order, and write the result to `vd[0]`.
+Other destination elements are preserved. Sum wraps modulo SEW; min and max use
+signed comparisons:
+
+- `vredsum.vs vd, vs2, vs1`
+- `vredmin.vs vd, vs2, vs1`
+- `vredmax.vs vd, vs2, vs1`
+- `vredand.vs vd, vs2, vs1`
+- `vredor.vs vd, vs2, vs1`
+- `vredxor.vs vd, vs2, vs1`
+
+### Mask population count
+
+`vcpop.m rd, vs2` counts set predicate bits in the active portion (`0..vl-1`)
+of vector register `vs2` and writes the count to scalar integer register `rd`.
+This lets an assembly sequence count elements selected by a preceding comparison.
+
 ### Unit-stride vector memory instructions
 
 The assembler and RVSS processor support these unmasked forms:
@@ -89,8 +109,7 @@ not supported.
 - Vector arithmetic, logical operations, comparisons, loads, and stores support unmasked operations only.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
-- Mask operations, vector comparisons, reductions, and other RVV instructions
-  are not implemented in this milestone.
+- Masked execution, average computation, and several other RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 
@@ -120,7 +139,7 @@ consume it as a predication mask.
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, vector addition/subtraction at all supported SEWs,
+instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, reductions and mask population count,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, and unsupported vector memory forms.
 The full CMake test suite requires Qt 6.9.2 and GoogleTest.
