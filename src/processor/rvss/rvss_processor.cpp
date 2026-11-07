@@ -517,6 +517,11 @@ void RVSSProcessor::ExecuteVector()
     const bool vm = ((current_instruction_ >> 25) & 1u) != 0;
     const uint8_t vs2 = (current_instruction_ >> 20) & 0x1F;
     const uint8_t vs1 = rs1;
+    const auto predicate_mask = registers_.ReadVector(0);
+    const auto lane_is_active = [&](size_t lane)
+    {
+        return vm || ((predicate_mask[lane / 8] >> (lane % 8)) & 1u) != 0;
+    };
 
     // vcpop.m is an OPMVX unary operation with a fixed vs1 field of 10000.
     if (funct3 == 0b110 && funct6 == 0b010000 && vs1 == 0b10000)
@@ -567,8 +572,6 @@ void RVSSProcessor::ExecuteVector()
     // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order.
     if (funct3 == 0b010)
     {
-        if (!vm)
-            throw std::runtime_error("Masked vector reductions are not supported in this milestone");
         const bool supported_reduction =
             funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
             funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111;
@@ -582,6 +585,8 @@ void RVSSProcessor::ExecuteVector()
         uint64_t accumulator = readElement(seed, 0);
         for (size_t lane = 0; lane < vector_vl_; ++lane)
         {
+            if (!lane_is_active(lane))
+                continue;
             const uint64_t value = readElement(source, lane);
             switch (funct6)
             {
@@ -606,8 +611,6 @@ void RVSSProcessor::ExecuteVector()
         return;
     }
 
-    if (!vm)
-        throw std::runtime_error("Masked vector operations are not supported in this milestone");
     if (funct3 != 0b000)
         throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
 
@@ -623,6 +626,8 @@ void RVSSProcessor::ExecuteVector()
     const auto old_destination = result;
     for (size_t lane = 0; lane < vector_vl_; ++lane)
     {
+        if (!lane_is_active(lane))
+            continue;
         const uint64_t a = readElement(lhs, lane);
         const uint64_t b = readElement(rhs, lane);
         if (comparison)
