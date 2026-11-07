@@ -1487,8 +1487,8 @@ std::string disassemble(uint32_t instruction)
             default: break;
             }
         }
-        if (funct3 == 0b110 && vm && funct6 == 0b010000 && rs1 == 0b10000)
-            return "vcpop.m " + xr(rd) + ", " + vr(rs2);
+        if (funct3 == 0b110 && funct6 == 0b010000 && rs1 == 0b10000)
+            return "vcpop.m " + xr(rd) + ", " + vr(rs2) + mask_suffix;
         return "<unknown-vector>";
     }
 
