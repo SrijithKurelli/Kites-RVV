@@ -69,27 +69,26 @@ not supported.
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
 - Mask operations, vector comparisons, reductions, and other RVV instructions
   are not implemented in this milestone.
-- Vector instructions are implemented only in the RVSS single-cycle processor;
-  the five-stage pipeline does not support them.
 
-## Example configuration and arithmetic sequence
+## Example load–compute–store sequence
 
 ```asm
 .text
-addi x5, x0, 4
-vsetvli x6, x5, 0       # SEW=8, LMUL=1, VL=4
-vadd.vv v1, v2, v3
-vsub.vv v4, v2, v3
+# x5 points to initialized source bytes; x6 points to destination memory.
+addi x7, x0, 4
+vsetvli x8, x7, 0       # SEW=8, LMUL=1, VL=4
+vle8.v  v1, (x5)        # Load four bytes into v1.
+vadd.vv v2, v1, v1      # Double each active element.
+vse8.v  v2, (x6)        # Store four result bytes.
 ```
 
-This shows instruction syntax and configuration. To produce non-zero arithmetic
-results, `v2` and `v3` must first be populated; vector memory support is not yet
-part of this milestone.
+The source and destination addresses must refer to valid, initialized memory.
+The example uses matching EEW and SEW (8 bits).
 
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
 instruction encoding, vector addition/subtraction at all supported SEWs,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
-tail preservation, memory undo/redo, and unsupported vector memory forms. The repository's full CMake test suite still requires its documented
-Qt 6.9.2 build dependencies.
+tail preservation, memory undo/redo, and unsupported vector memory forms.
+The full CMake test suite requires Qt 6.9.2 and GoogleTest.
