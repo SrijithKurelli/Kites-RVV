@@ -117,7 +117,7 @@ not supported.
 - Arithmetic, logical, comparison, reduction, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
-- An end-to-end average example and its rounding/zero-count behavior remain to be completed. Strided memory, pipeline support, and several RVV operations remain unimplemented.
+- Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Strided memory, pipeline support, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 
@@ -144,10 +144,39 @@ vmsltu.vv v3, v1, v2   # v3 contains packed predicate bits
 The comparison result is a bit-packed mask vector. To use it for predication, write the
 comparison result to `v0` and append `, v0.t` to a supported vector operation.
 
+## Average of elements selected by a comparison
+
+The subset does not add a non-standard average instruction. An average can be
+constructed from the supported vector reduction and population count, then
+finished with scalar integer division. This example averages the elements in
+`v1` that equal the corresponding elements in `v2` (SEW=32):
+
+```asm
+addi x6, x0, 4
+addi x10, x0, 256       # scratch address for the reduction result
+vsetvli x7, x6, 16      # SEW=32, VL=4
+vmseq.vv v0, v1, v2     # select matching lanes
+vredsum.vs v5, v1, v4, v0.t  # v4[0] must be initialized to zero
+vse32.v v5, (x10)
+lw x11, 0(x10)          # scalar sum
+vcpop.m x12, v0         # scalar count
+beq x12, x0, no_matches
+div x13, x11, x12       # signed integer quotient, rounded toward zero
+jal x0, average_done
+no_matches:
+addi x13, x0, 0         # application-defined empty-set result
+average_done:
+```
+
+The example assumes non-negative input values and a valid scratch-memory
+address. Integer division truncates toward zero. The empty-set result is
+explicitly selected by the caller; this example uses zero. The reduction seed
+in `v4[0]` must be initialized before execution.
+
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions and mask population count,
+instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions, mask population count, average-from-sum/count rounding and zero-count handling,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, and unsupported vector memory forms.
 The full CMake test suite requires Qt 6.9.2 and GoogleTest. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.
