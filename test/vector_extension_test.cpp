@@ -57,7 +57,8 @@ TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)
 
     manager.loadProgram(assembleVectorSource(
         "addi x5, x0, 4\n"
-        "vsetvli x6, x5, 16\n"));
+        "vsetvli x6, x5, 16\n"
+        "nop\n"));
     manager.step();
     manager.step();
 
@@ -90,7 +91,8 @@ TEST(VectorExtension, AverageFromMaskedSumAndCountUsesIntegerTruncation)
         "vse32.v v5, (x10)\n"
         "lw x11, 0(x10)\n"
         "vcpop.m x12, v0\n"
-        "div x13, x11, x12\n"));
+        "div x13, x11, x12\n"
+        "nop\n"));
 
     for (int instruction = 0; instruction < 9; ++instruction)
         manager.step();
