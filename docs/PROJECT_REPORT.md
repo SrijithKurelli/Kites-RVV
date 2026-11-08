@@ -94,11 +94,14 @@ reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
 This count comparison is a simple architectural metric; it does not claim a
 wall-clock speedup or a cycle-accurate timing model. The average test checks
-both positive `5 / 2 = 2` and negative `-5 / 2 = -2` signed division, confirming
-truncation toward zero, as well as the explicit zero-count branch. CI run #64
-(commit `f3041d5`) passed all 334 CTest tests (0 failures) and smoke-tested all
-four runnable assembly examples on RVSS. The workflow additionally builds the
-CLI and suite under Linux with Qt 6.9.2 and GCC.
+the positive `5 / 2 = 2` case and the explicit zero-count branch. A negative
+signed-division regression (`-5 / 2 = -2`) has now been added to distinguish
+truncation toward zero from floor division; this new assertion is pending the
+next CI run. CI run #64 (commit `f3041d5`) passed all 334 CTest tests (0 failures)
+and smoke-tested all four runnable assembly examples on RVSS. The latest branch
+commit also strengthens the CI workflow to assert the average program's printed
+result and exercise the REPL `info` and `regs` commands; these new checks await
+CI run #66. The workflow builds the CLI and suite under Linux with Qt 6.9.2 and GCC.
 
 ## 6. Known limitations
 
