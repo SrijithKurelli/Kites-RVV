@@ -605,8 +605,8 @@ TEST(VectorExtension, MaskedStoreDoesNotAccessInactiveOutOfRangeLane)
     vm.registers_.WriteVectorByte(1, 1, 0xA5u);
 
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 0\\n"
-        "vse8.v v1, (x8), v0.t\\n"));
+        "vsetvli x6, x5, 0\n"
+        "vse8.v v1, (x8), v0.t\n"));
     vm.Step();
     EXPECT_NO_THROW(vm.Step());
     EXPECT_EQ(vm.memory_controller_.readByte(last_valid_address), 0x5Au);
