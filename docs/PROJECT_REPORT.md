@@ -101,7 +101,7 @@ next CI run. CI run #64 (commit `f3041d5`) passed all 334 CTest tests (0 failure
 and smoke-tested all four runnable assembly examples on RVSS. The latest branch
 commit also strengthens the CI workflow to assert the average program's printed
 result and exercise the REPL `info` and `regs` commands; these new checks await
-CI run #66. The workflow builds the CLI and suite under Linux with Qt 6.9.2 and GCC.
+CI run #67. The workflow builds the CLI and suite under Linux with Qt 6.9.2 and GCC.
 
 ## 6. Known limitations
 

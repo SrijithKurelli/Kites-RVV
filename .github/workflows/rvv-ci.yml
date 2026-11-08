@@ -80,12 +80,8 @@ jobs:
             echo "::endgroup::"
           done
 
-          repl_output="$(./build/ci/kites-cli examples/vector/vector_load_add_store.s --repl <<'EOF'
-info
-regs
-exit
-EOF
-)"
+          repl_input="$(printf '%b' 'info\nregs\nexit\n')"
+          repl_output="$(printf '%s' "$repl_input" | ./build/ci/kites-cli examples/vector/vector_load_add_store.s --repl)"
           grep -Fq 'VLEN=128, LMUL=1' <<< "$repl_output"
           grep -Fq 'Vector registers (128-bit):' <<< "$repl_output"
 

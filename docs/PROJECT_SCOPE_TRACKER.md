@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-08 (CI run #64 baseline; latest assertions pending run #66)
+Last updated: 2026-11-08 (CI run #64 baseline; latest assertions pending run #67)
 
 ## Must-have core scope
 
@@ -26,8 +26,8 @@ Last updated: 2026-11-08 (CI run #64 baseline; latest assertions pending run #66
 | Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #64; 334 CTest tests passed. The negative signed-average regression and strengthened CLI output assertions are included in the latest branch commit and await CI run #66. |
-| Scalar regression | Verified | CI run #64 passed the full CTest suite: 334 passed, 0 failed (20.72 seconds), including existing scalar regressions. The newly added negative-average test awaits run #66. |
+| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #64; 334 CTest tests passed. The negative signed-average regression and strengthened CLI output assertions are included in the latest branch commit and await CI run #67. |
+| Scalar regression | Verified | CI run #64 passed the full CTest suite: 334 passed, 0 failed (20.72 seconds), including existing scalar regressions. The newly added negative-average test awaits run #67. |
 | Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | Verified by CI run #64: a four-element sum test checks equal results and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
 | Short design/validation/limitations report | Drafted; validation evidence refreshed | `docs/PROJECT_REPORT.md` summarizes architecture, supported instructions, validation approach, and known/deferred limitations; it records CI run #64 as the latest completed green baseline; newer regression/CLI assertions await run #66. Final editorial review remains. |
 
