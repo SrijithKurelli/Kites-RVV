@@ -168,8 +168,10 @@ addi x13, x0, 0         # application-defined empty-set result
 average_done:
 ```
 
-The example assumes non-negative input values and a valid scratch-memory
-address. Integer division truncates toward zero. The empty-set result is
+The example assumes non-negative input values whose sum fits in the signed
+32-bit range, and a valid scratch-memory address. The reduction itself wraps
+modulo SEW, so a wider or signed-overflow-safe accumulation is not provided by
+this subset. Integer division truncates toward zero. The empty-set result is
 explicitly selected by the caller; this example uses zero. The reduction seed
 in `v4[0]` must be initialized before execution.
 
