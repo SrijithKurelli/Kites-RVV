@@ -1,7 +1,7 @@
 # Demonstrate selected Zvbb-style vector bit manipulation operations.
 # Supported forms here are vector-vector and per-element vector forms only.
 .data
-data:                .byte 129, 66, 0, 255
+input_values:        .byte 129, 66, 0, 255
 rotate_amounts:      .byte 1, 2, 3, 4
 andnot_result:       .byte 0, 0, 0, 0
 rotate_left_result:  .byte 0, 0, 0, 0
@@ -12,7 +12,7 @@ population_counts:   .byte 0, 0, 0, 0
 
 .text
 main:
-    la x5, data
+    la x5, input_values
     la x6, rotate_amounts
     la x7, andnot_result
     la x8, rotate_left_result
