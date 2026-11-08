@@ -10,8 +10,12 @@ claim of complete RISC-V Vector (RVV 1.0) compliance.
 - `LMUL=1` only.
 - `SEW` values of 8, 16, 32, or 64 bits.
 - Current `vl` and `sew` are maintained by the RVSS processor.
-- Vector register values are visible in the GUI's Vector register section and
-  in `registers_dump.json` under `vec_registers`.
+- Vector register values are visible in the GUI's Vector register section,
+  in the CLI REPL `regs` output, and in `registers_dump.json` under `vec_registers`.
+- The CLI REPL `info` command reports the active RVSS vector configuration
+  (`VLEN`, `LMUL`, `SEW`, `VL`, and `VLMAX`). Pipeline processor models report
+  that vector configuration inspection is unavailable because vector execution
+  is not implemented for those models.
 
 ## Supported assembly instructions
 
