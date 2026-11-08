@@ -54,6 +54,9 @@ public:
     void setBreakpoints(const std::vector<uint64_t> &breakpoints);
 
     RegisterFile *getRegisterFile() const;
+    bool hasVectorState() const;
+    uint8_t getVectorSew() const;
+    uint8_t getVectorVl() const;
     MemoryController *getMemoryController() const;
     CircuitScene *getCircuitScene() const;
     const Profiler* getProfiler() const;
