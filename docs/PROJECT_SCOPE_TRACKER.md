@@ -27,7 +27,7 @@ Last updated: 2026-11-08
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Partial | Load-compute-store, comparison, and average examples documented; automated tests cover average and zero-count behavior. Continue expanding representative end-to-end examples. |
-| Scalar regression | Passing in latest CI run | Latest Actions run passed 330 tests with 0 failures. One non-blocking Node.js 20 deprecation warning remains for `actions/checkout@v4`. Continue running the full suite after each change. |
+| Scalar regression | Baseline CI passed; latest commits unverified | The previously observed Actions run passed 330 tests with 0 failures. Subsequent CLI-inspection and average-example commits still require a fresh CI run. The earlier run showed a non-blocking Node.js 20 deprecation warning for `actions/checkout@v4`. |
 | Short design/validation/limitations report | Not started | Prepare after core behavior and regression results stabilize. |
 
 ## Stretch scope
