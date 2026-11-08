@@ -13,6 +13,7 @@
 #include "ui/processor_tab/circuit_scene.h"
 #include "processor_state.h"
 #include <QObject>
+#include <cstdint>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
