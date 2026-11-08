@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-07
+Last updated: 2026-11-08
 
 ## Must-have core scope
 
@@ -24,10 +24,10 @@ Last updated: 2026-11-07
 | Inactive and tail element handling | Implemented for current subset | `vta=vma=0` behavior: masked-off and tail destination elements remain unchanged; masked stores skip inactive lanes. |
 | Unit-stride vector loads/stores | Implemented subset; CI coverage present | `vle8/16/32/64.v`, `vse8/16/32/64.v`; masked and unmasked forms; requires EEW=SEW. |
 | Assembler, decoder and execution integration | Partial | Current subset is wired end-to-end; expand as instructions are added. |
-| CLI view of vector registers | Partial | `registers_dump.json` includes all vector registers. |
-| CLI view of vector configuration | Not started | Add `vl`, `vtype`/SEW and LMUL to a user-facing CLI/JSON state view. |
+| CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
+| CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Partial | Basic load-compute-store example and tests exist; build out examples for every core category. |
-| Scalar regression | In progress | Latest CI built successfully; one comparison-test fixture wrote beyond the two available SEW=64 lanes. Fixture correction is committed; rerun CI before marking green. |
+| Scalar regression | Passing in latest CI run | Latest Actions run passed 330 tests with 0 failures. One non-blocking Node.js 20 deprecation warning remains for `actions/checkout@v4`. Continue running the full suite after each change. |
 | Short design/validation/limitations report | Not started | Prepare after core behavior and regression results stabilize. |
 
 ## Stretch scope
