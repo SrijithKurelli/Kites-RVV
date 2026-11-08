@@ -65,6 +65,42 @@ TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)
     EXPECT_EQ(manager.getVectorVl(), 4u);
 }
 
+TEST(VectorExtension, AverageFromMaskedSumAndCountUsesIntegerTruncation)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+
+    writeElement(*registers, 1, 0, 4, 1);
+    writeElement(*registers, 1, 1, 4, 2);
+    writeElement(*registers, 1, 2, 4, 3);
+    writeElement(*registers, 1, 3, 4, 4);
+    writeElement(*registers, 2, 0, 4, 1);
+    writeElement(*registers, 2, 1, 4, 0);
+    writeElement(*registers, 2, 2, 4, 3);
+    writeElement(*registers, 2, 3, 4, 0);
+    writeElement(*registers, 4, 0, 4, 0);
+
+    manager.loadProgram(assembleVectorSource(
+        "addi x6, x0, 4\n"
+        "addi x10, x0, 256\n"
+        "vsetvli x7, x6, 16\n"
+        "vmseq.vv v0, v1, v2\n"
+        "vredsum.vs v5, v1, v4, v0.t\n"
+        "vse32.v v5, (x10)\n"
+        "lw x11, 0(x10)\n"
+        "vcpop.m x12, v0\n"
+        "div x13, x11, x12\n"));
+
+    for (int instruction = 0; instruction < 9; ++instruction)
+        manager.step();
+
+    EXPECT_EQ(registers->ReadGpr(11), 4u);
+    EXPECT_EQ(registers->ReadGpr(12), 2u);
+    EXPECT_EQ(registers->ReadGpr(13), 2u);
+    EXPECT_EQ(readElement(*registers, 5, 0, 4), 4u);
+}
+
 TEST(VectorExtension, RegisterFileStoresAndResets128Bits)
 {
     Kites::RegisterFile registers;
