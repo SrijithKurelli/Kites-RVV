@@ -66,6 +66,15 @@ jobs:
       - name: Build CLI and test suite
         run: cmake --build build/ci --target kites_cli kites_test --parallel 2
 
+      - name: Smoke-test RVSS vector examples
+        run: |
+          set -euo pipefail
+          for example in examples/vector/*.s; do
+            echo "::group::Smoke test ${example}"
+            ./build/ci/kites-cli "${example}" --vm rvss
+            echo "::endgroup::"
+          done
+
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
