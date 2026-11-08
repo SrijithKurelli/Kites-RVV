@@ -73,11 +73,11 @@ TEST(VectorExtension, AverageFromMaskedSumAndCountUsesIntegerTruncation)
 
     writeElement(*registers, 1, 0, 4, 1);
     writeElement(*registers, 1, 1, 4, 2);
-    writeElement(*registers, 1, 2, 4, 3);
+    writeElement(*registers, 1, 2, 4, 4);
     writeElement(*registers, 1, 3, 4, 4);
     writeElement(*registers, 2, 0, 4, 1);
     writeElement(*registers, 2, 1, 4, 0);
-    writeElement(*registers, 2, 2, 4, 3);
+    writeElement(*registers, 2, 2, 4, 4);
     writeElement(*registers, 2, 3, 4, 0);
     writeElement(*registers, 4, 0, 4, 0);
 
@@ -95,10 +95,10 @@ TEST(VectorExtension, AverageFromMaskedSumAndCountUsesIntegerTruncation)
     for (int instruction = 0; instruction < 9; ++instruction)
         manager.step();
 
-    EXPECT_EQ(registers->ReadGpr(11), 4u);
+    EXPECT_EQ(registers->ReadGpr(11), 5u);
     EXPECT_EQ(registers->ReadGpr(12), 2u);
-    EXPECT_EQ(registers->ReadGpr(13), 2u);
-    EXPECT_EQ(readElement(*registers, 5, 0, 4), 4u);
+    EXPECT_EQ(registers->ReadGpr(13), 2u); // 5 / 2 truncates toward zero.
+    EXPECT_EQ(readElement(*registers, 5, 0, 4), 5u);
 }
 
 TEST(VectorExtension, AverageExampleHandlesZeroMatchingElements)
