@@ -19,14 +19,14 @@ Last updated: 2026-11-08
 | Reductions: sum, min, max | Implemented subset | `vredsum.vs`, `vredmin.vs`, `vredmax.vs`; `vs1[0]` seed and `vd[0]` result; signed min/max. |
 | Reductions: AND, OR, XOR | Implemented | `vredand.vs`, `vredor.vs`, `vredxor.vs`; all supported SEWs covered by tests. |
 | Count elements matching a condition | Implemented subset | `vcpop.m rd, vs2` counts active set predicate bits and writes a GPR; comparison-to-count sequence tested. |
-| Average from sum and count | Not started | Define rounding behavior in tests; handle zero count explicitly. |
+| Average from sum and count | Implemented as a documented assembly sequence | Masked `vredsum.vs` + `vcpop.m` + scalar `div`; tests cover truncation toward zero and an explicit zero-count branch (the example chooses zero). |
 | Masked execution | Implemented subset | Optional `, v0.t` on vector-vector ops, reductions, `vcpop.m`, and unit-stride loads/stores; inactive destination lanes are undisturbed. |
 | Inactive and tail element handling | Implemented for current subset | `vta=vma=0` behavior: masked-off and tail destination elements remain unchanged; masked stores skip inactive lanes. |
 | Unit-stride vector loads/stores | Implemented subset; CI coverage present | `vle8/16/32/64.v`, `vse8/16/32/64.v`; masked and unmasked forms; requires EEW=SEW. |
 | Assembler, decoder and execution integration | Partial | Current subset is wired end-to-end; expand as instructions are added. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Partial | Basic load-compute-store example and tests exist; build out examples for every core category. |
+| Assembly examples and automated tests | Partial | Load-compute-store, comparison, and average examples documented; automated tests cover average and zero-count behavior. Continue expanding representative end-to-end examples. |
 | Scalar regression | Passing in latest CI run | Latest Actions run passed 330 tests with 0 failures. One non-blocking Node.js 20 deprecation warning remains for `actions/checkout@v4`. Continue running the full suite after each change. |
 | Short design/validation/limitations report | Not started | Prepare after core behavior and regression results stabilize. |
 
