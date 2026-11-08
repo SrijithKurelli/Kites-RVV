@@ -941,7 +941,6 @@ void RVSSProcessor::WriteMemory()
                 "Vector memory EEW must match the currently configured SEW in this Kites subset");
 
         const uint64_t base_address = registers_.ReadGpr(base_register);
-        const size_t transferred_bytes = static_cast<size_t>(vector_vl_) * element_bytes;
 
         if (is_load)
         {
