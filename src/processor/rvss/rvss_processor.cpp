@@ -22,6 +22,7 @@
 #include <queue>
 #include <stdexcept>
 #include <stack>
+#include <limits>
 #include <thread>
 #include <tuple>
 #include <utility>
@@ -48,6 +49,41 @@ size_t vectorMemoryElementBytes(uint32_t instruction)
     case 0b111: return 8;
     default: throw std::runtime_error("Unsupported vector memory element width");
     }
+}
+
+uint64_t vectorMemoryAddress(uint64_t base, int64_t stride, size_t lane,
+                             size_t element_bytes)
+{
+    const uint64_t lane_index = static_cast<uint64_t>(lane);
+    uint64_t address = base;
+    if (stride >= 0)
+    {
+        const uint64_t magnitude = static_cast<uint64_t>(stride);
+        if (lane_index != 0 &&
+            magnitude > std::numeric_limits<uint64_t>::max() / lane_index)
+            throw std::out_of_range("Strided vector memory address overflow");
+        const uint64_t offset = magnitude * lane_index;
+        if (base > std::numeric_limits<uint64_t>::max() - offset)
+            throw std::out_of_range("Strided vector memory address overflow");
+        address = base + offset;
+    }
+    else
+    {
+        // Avoid negating INT64_MIN directly.
+        const uint64_t magnitude = static_cast<uint64_t>(-(stride + 1)) + 1u;
+        if (lane_index != 0 &&
+            magnitude > std::numeric_limits<uint64_t>::max() / lane_index)
+            throw std::out_of_range("Strided vector memory address underflow");
+        const uint64_t offset = magnitude * lane_index;
+        if (base < offset)
+            throw std::out_of_range("Strided vector memory address underflow");
+        address = base - offset;
+    }
+
+    const uint64_t memory_size = vm_config::config.getMemorySize();
+    if (address > memory_size || element_bytes > memory_size - address)
+        throw std::out_of_range("Vector memory element address out of range");
+    return address;
 }
 
 uint64_t readVectorMemoryElement(MemoryController &memory, uint64_t address, size_t bytes)
@@ -242,8 +278,8 @@ void RVSSProcessor::Execute()
         return;
     }
 
-    // Unit-stride vector memory instructions use rs1 as a scalar base address.
-    // Their vector register fields must not pass through scalar GPR decoding.
+    // Vector memory instructions use rs1 as a scalar base and, for strided
+    // forms, rs2 as a signed byte stride. Vector fields bypass scalar decoding.
     if (isVectorMemoryInstruction(current_instruction_))
     {
         const uint8_t base_register = (current_instruction_ >> 15) & 0x1Fu;
@@ -995,9 +1031,11 @@ void RVSSProcessor::WriteMemory()
         const uint8_t vector_register = (current_instruction_ >> 7) & 0x1Fu;
         const size_t element_bytes = vectorMemoryElementBytes(current_instruction_);
 
-        if (nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+        const bool is_strided = mop == 0b10;
+        if (nf != 0 || mew || (mop != 0 && !is_strided) ||
+            (!is_strided && lumop_or_sumop != 0))
             throw std::runtime_error(
-                "Only unit-stride one-field vector loads/stores are supported");
+                "Only unit-stride and strided one-field vector loads/stores are supported");
 
         const auto predicate_mask = registers_.ReadVector(0);
         const auto lane_is_active = [&](size_t lane)
@@ -1009,6 +1047,9 @@ void RVSSProcessor::WriteMemory()
                 "Vector memory EEW must match the currently configured SEW in this Kites subset");
 
         const uint64_t base_address = registers_.ReadGpr(base_register);
+        const int64_t stride_bytes = is_strided
+            ? static_cast<int64_t>(registers_.ReadGpr(rs2))
+            : static_cast<int64_t>(element_bytes);
 
         if (is_load)
         {
@@ -1019,8 +1060,10 @@ void RVSSProcessor::WriteMemory()
             {
                 if (!lane_is_active(lane))
                     continue;
-                const uint64_t value = readVectorMemoryElement(
-                    memory_controller_, base_address + lane * element_bytes, element_bytes);
+                const uint64_t address =
+                    vectorMemoryAddress(base_address, stride_bytes, lane, element_bytes);
+                const uint64_t value =
+                    readVectorMemoryElement(memory_controller_, address, element_bytes);
                 const size_t offset = lane * element_bytes;
                 for (size_t byte = 0; byte < element_bytes; ++byte)
                     new_destination[offset + byte] =
@@ -1057,10 +1100,8 @@ void RVSSProcessor::WriteMemory()
                     continue;
 
                 const size_t offset = lane * element_bytes;
-                const uint64_t address = base_address + offset;
-                if (address < base_address ||
-                    address >= vm_config::config.getMemorySize() - (element_bytes - 1))
-                    throw std::out_of_range("Vector store element address out of range");
+                const uint64_t address =
+                    vectorMemoryAddress(base_address, stride_bytes, lane, element_bytes);
 
                 PendingVectorStore pending{address, 0, {}};
                 pending.old_bytes.reserve(element_bytes);

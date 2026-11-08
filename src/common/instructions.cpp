@@ -381,7 +381,9 @@ static const std::unordered_set<std::string> valid_instructions = {
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
     "vle8.v", "vle16.v", "vle32.v", "vle64.v",
-    "vse8.v", "vse16.v", "vse32.v", "vse64.v"
+    "vse8.v", "vse16.v", "vse32.v", "vse64.v",
+    "vlse8.v", "vlse16.v", "vlse32.v", "vlse64.v",
+    "vsse8.v", "vsse16.v", "vsse32.v", "vsse64.v"
 
 };
 
@@ -970,6 +972,14 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vse16.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
     {"vse64.v", {SyntaxType::O_VEC_C_LP_GPR_RP}},
+    {"vlse8.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vlse16.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vlse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vlse64.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vsse8.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vsse16.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vsse32.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
+    {"vsse64.v", {SyntaxType::O_VEC_C_LP_GPR_RP_C_GPR}},
 
     {"fmadd.d", {SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR_C_RM}},
     {"fmsub.d", {SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_FPR_C_FPR_C_RM}},
@@ -1140,7 +1150,9 @@ bool isValidVectorInstruction(const std::string &instruction)
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
         "vle8.v", "vle16.v", "vle32.v", "vle64.v",
-        "vse8.v", "vse16.v", "vse32.v", "vse64.v"
+        "vse8.v", "vse16.v", "vse32.v", "vse64.v",
+        "vlse8.v", "vlse16.v", "vlse32.v", "vlse64.v",
+        "vsse8.v", "vsse16.v", "vsse32.v", "vsse64.v"
     };
     return vector_instructions.find(instruction) != vector_instructions.end();
 }
@@ -1533,14 +1545,22 @@ std::string disassemble(uint32_t instruction)
             const uint8_t nf = (instruction >> 29) & 0x7u;
             const bool mew = ((instruction >> 28) & 1u) != 0;
             const uint8_t mop = (instruction >> 26) & 0x3u;
-            const uint8_t lumop_or_sumop = (instruction >> 20) & 0x1Fu;
-            if (nf != 0 || mew || mop != 0 || lumop_or_sumop != 0)
+            const uint8_t rs2_or_lumop = (instruction >> 20) & 0x1Fu;
+            if (nf != 0 || mew || (mop != 0 && mop != 0b10) ||
+                (mop == 0 && rs2_or_lumop != 0))
                 return "<unknown-vector-memory>";
 
-            const std::string mnemonic = opcode == 0x07u ? "vle" : "vse";
+            const bool is_strided = mop == 0b10;
+            const bool is_load = opcode == 0x07u;
+            const std::string mnemonic = is_strided
+                ? (is_load ? "vlse" : "vsse")
+                : (is_load ? "vle" : "vse");
             const std::string mask_suffix = vm ? "" : ", v0.t";
-            return mnemonic + std::to_string(element_width) + ".v " + vr(rd) +
-                   ", (" + xr(rs1) + ")" + mask_suffix;
+            std::string result = mnemonic + std::to_string(element_width) + ".v " +
+                                 vr(rd) + ", (" + xr(rs1) + ")";
+            if (is_strided)
+                result += ", " + xr(rs2_or_lumop);
+            return result + mask_suffix;
         }
     }
 

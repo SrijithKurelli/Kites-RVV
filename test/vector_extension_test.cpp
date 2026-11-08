@@ -305,6 +305,201 @@ TEST(VectorExtension, VectorUnitStrideMemoryWorksForEverySupportedSew)
     }
 }
 
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesStridedVectorMemory)
+{
+    const auto program = assembleVectorSource(
+        "vlse8.v v1, (x5), x6\n"
+        "vlse16.v v2, (x7), x8, v0.t\n"
+        "vlse32.v v3, (x9), x10\n"
+        "vlse64.v v4, (x11), x12\n"
+        "vsse8.v v13, (x14), x15\n"
+        "vsse16.v v16, (x17), x18\n"
+        "vsse32.v v19, (x20), x21, v0.t\n"
+        "vsse64.v v22, (x23), x24\n");
+    ASSERT_EQ(program.text_buffer.size(), 8u);
+    for (size_t index = 0; index < program.text_buffer.size(); ++index)
+    {
+        const uint32_t instruction = program.text_buffer[index];
+        EXPECT_EQ(instruction & 0x7Fu, index < 4 ? 0x07u : 0x27u);
+        EXPECT_EQ((instruction >> 26) & 0x3u, 0b10u);
+    }
+    EXPECT_EQ((program.text_buffer[0] >> 20) & 0x1Fu, 6u);
+    EXPECT_EQ((program.text_buffer[0] >> 25) & 1u, 1u);
+    EXPECT_EQ((program.text_buffer[1] >> 25) & 1u, 0u);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vlse8.v v1, (x5), x6");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]),
+              "vlse16.v v2, (x7), x8, v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[6]),
+              "vsse32.v v19, (x20), x21, v0.t");
+}
+
+TEST(VectorExtension, StridedVectorMemoryWorksForEverySupportedSew)
+{
+    struct Case
+    {
+        int zimm;
+        size_t element_bytes;
+        const char *load_mnemonic;
+        const char *store_mnemonic;
+    };
+    const Case cases[] = {
+        {0, 1, "vlse8.v", "vsse8.v"},
+        {8, 2, "vlse16.v", "vsse16.v"},
+        {16, 4, "vlse32.v", "vsse32.v"},
+        {24, 8, "vlse64.v", "vsse64.v"},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        constexpr uint64_t source_address = 0x5000;
+        constexpr uint64_t destination_address = 0x6000;
+        constexpr size_t active_lanes = 2;
+        const size_t stride = 2 * test_case.element_bytes;
+        vm.registers_.WriteGpr(5, active_lanes);
+        vm.registers_.WriteGpr(7, source_address);
+        vm.registers_.WriteGpr(8, destination_address);
+        vm.registers_.WriteGpr(9, stride);
+        for (size_t byte = 0; byte < 16; ++byte)
+            vm.registers_.WriteVectorByte(1, byte, 0xCCu);
+        for (size_t byte = 0; byte < 6 * test_case.element_bytes; ++byte)
+            vm.memory_controller_.writeByte(source_address + byte,
+                                            static_cast<uint8_t>(byte + 1));
+        for (size_t byte = 0; byte < 32; ++byte)
+            vm.memory_controller_.writeByte(destination_address + byte,
+                                            static_cast<uint8_t>(0xA0u + byte));
+
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n" +
+            std::string(test_case.load_mnemonic) + " v1, (x7), x9\n" +
+            std::string(test_case.store_mnemonic) + " v1, (x8), x9\n"));
+        vm.Step();
+        vm.Step();
+        for (size_t lane = 0; lane < active_lanes; ++lane)
+        {
+            for (size_t byte = 0; byte < test_case.element_bytes; ++byte)
+            {
+                const size_t vector_offset = lane * test_case.element_bytes + byte;
+                const size_t memory_offset = lane * stride + byte;
+                EXPECT_EQ(vm.registers_.ReadVectorByte(1, vector_offset),
+                          static_cast<uint8_t>(memory_offset + 1));
+            }
+        }
+        for (size_t byte = active_lanes * test_case.element_bytes; byte < 16; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), 0xCCu);
+
+        vm.Step();
+        for (size_t lane = 0; lane < active_lanes; ++lane)
+        {
+            for (size_t byte = 0; byte < test_case.element_bytes; ++byte)
+            {
+                const size_t memory_offset = lane * stride + byte;
+                EXPECT_EQ(vm.memory_controller_.readByte(destination_address + memory_offset),
+                          static_cast<uint8_t>(memory_offset + 1));
+            }
+        }
+        for (size_t byte = 0; byte < 32; ++byte)
+        {
+            const bool written = byte < test_case.element_bytes ||
+                (byte >= stride && byte < stride + test_case.element_bytes);
+            if (!written)
+                EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                          static_cast<uint8_t>(0xA0u + byte));
+        }
+
+        vm.Undo();
+        for (size_t byte = 0; byte < 32; ++byte)
+            EXPECT_EQ(vm.memory_controller_.readByte(destination_address + byte),
+                      static_cast<uint8_t>(0xA0u + byte));
+        vm.Undo();
+        for (size_t byte = 0; byte < 16; ++byte)
+            EXPECT_EQ(vm.registers_.ReadVectorByte(1, byte), 0xCCu);
+        vm.Redo();
+        vm.Redo();
+        for (size_t lane = 0; lane < active_lanes; ++lane)
+            EXPECT_EQ(vm.memory_controller_.readByte(
+                          destination_address + lane * stride),
+                      static_cast<uint8_t>(lane * stride + 1));
+    }
+}
+
+TEST(VectorExtension, NegativeStridedMemoryAndMaskingWork)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    constexpr uint64_t source_address = 0x7000;
+    constexpr uint64_t destination_address = 0x7100;
+    vm.registers_.WriteGpr(5, 3);
+    vm.registers_.WriteGpr(7, source_address + 16);
+    vm.registers_.WriteGpr(8, destination_address + 16);
+    vm.registers_.WriteGpr(9, static_cast<uint64_t>(-8));
+    vm.registers_.WriteVectorByte(0, 0, 0x05u); // Enable lanes 0 and 2 only.
+    for (size_t word = 0; word < 5; ++word)
+        vm.memory_controller_.writeWord(source_address + word * 4,
+                                        static_cast<uint32_t>(10 + word * 10));
+    for (size_t byte = 0; byte < 24; ++byte)
+        vm.memory_controller_.writeByte(destination_address + byte, 0xA5u);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vlse32.v v1, (x7), x9, v0.t\n"
+        "vsse32.v v1, (x8), x9, v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(readElement(vm.registers_, 1, 0, 4), 50u);
+    EXPECT_EQ(readElement(vm.registers_, 1, 1, 4), 0u); // Masked-off lane is undisturbed.
+    EXPECT_EQ(readElement(vm.registers_, 1, 2, 4), 10u);
+    vm.Step();
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address + 16), 50u);
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address + 8), 0xA5A5A5A5u);
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address), 10u);
+    vm.Undo();
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address + 16), 0xA5A5A5A5u);
+    vm.Undo();
+    EXPECT_EQ(readElement(vm.registers_, 1, 0, 4), 0u);
+    vm.Redo();
+    vm.Redo();
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address + 16), 50u);
+    EXPECT_EQ(vm.memory_controller_.readWord(destination_address), 10u);
+}
+
+TEST(VectorExtension, ZeroStrideLoadsRepeatTheSameElement)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    constexpr uint64_t source_address = 0x8000;
+    vm.registers_.WriteGpr(5, 3);
+    vm.registers_.WriteGpr(7, source_address);
+    vm.registers_.WriteGpr(9, 0);
+    vm.memory_controller_.writeWord(source_address, 0x12345678u);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vlse32.v v1, (x7), x9\n"));
+    vm.Step();
+    vm.Step();
+    for (size_t lane = 0; lane < 3; ++lane)
+        EXPECT_EQ(readElement(vm.registers_, 1, lane, 4), 0x12345678u);
+}
+
+TEST(VectorExtension, StridedStorePreflightsEveryActiveLaneAddress)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 2);
+    vm.registers_.WriteGpr(7, 4);
+    vm.registers_.WriteGpr(8, static_cast<uint64_t>(-8));
+    vm.registers_.WriteVectorByte(1, 0, 0x5Au);
+    vm.registers_.WriteVectorByte(1, 1, 0xA5u);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vsse8.v v1, (x7), x8\n"));
+    vm.Step();
+    EXPECT_THROW(vm.Step(), std::out_of_range);
+    EXPECT_EQ(vm.memory_controller_.readByte(4), 0u);
+}
+
 TEST(VectorExtension, VectorMemoryRejectsMismatchedEew)
 {
     Kites::setupVmStateDirectory();

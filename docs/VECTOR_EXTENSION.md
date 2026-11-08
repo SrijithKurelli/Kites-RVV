@@ -135,8 +135,25 @@ transferred contiguously at addresses `base + lane * (EEW / 8)`. For this
 initial subset, `EEW` must equal the configured `SEW`, `vl` controls the
 number of transferred elements, and load tail elements are preserved. Stores
 record their memory changes so the simulator's undo/redo mechanism can reverse
-and replay them. Masked forms use the `v0` predicate and skip inactive lanes; strided, indexed, and segment memory operations are
-not supported.
+and replay them. Masked forms use the `v0` predicate and skip inactive lanes.
+
+### Strided vector memory instructions
+
+The selected strided one-field forms are also supported:
+
+- `vlse8.v vd, (rs1), rs2` and `vsse8.v vs3, (rs1), rs2`
+- `vlse16.v vd, (rs1), rs2` and `vsse16.v vs3, (rs1), rs2`
+- `vlse32.v vd, (rs1), rs2` and `vsse32.v vs3, (rs1), rs2`
+- `vlse64.v vd, (rs1), rs2` and `vsse64.v vs3, (rs1), rs2`
+
+`rs1` is the scalar base address. `rs2` supplies a signed byte stride, and
+active lane `i` accesses `base + i * stride`; positive, zero, and negative
+strides are supported. `EEW` must equal the configured `SEW`. An optional
+`, v0.t` mask skips inactive memory accesses. Masked-off and tail destination
+lanes remain undisturbed. Strided stores validate all active lane addresses and
+capture undo data before writing, preventing a partial store if a later active
+lane is out of range. Indexed and segment vector memory operations are not
+supported.
 
 ## Runnable example programs
 
@@ -147,6 +164,7 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_masked_add_store.s` — compare, masked arithmetic, and masked store.
 - `vector_average_selected.s` — masked sum, population count, zero-count guard, and integer average.
 - `vector_bitmanip.s` — selected vector AND-NOT, rotate, leading/trailing-zero, and population-count operations.
+- `vector_strided_memory.s` — positive-stride SEW=32 load/store, selecting every second word.
 
 See `examples/vector/README.md` for commands and expected results.
 
@@ -156,8 +174,7 @@ See `examples/vector/README.md` for commands and expected results.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
 - Arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
-- Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
-  strided/indexed/segment operations, and nonzero `nf` are not implemented.
+- Unit-stride and selected strided vector loads/stores require `EEW=SEW`; differing element widths, indexed/segment operations, and nonzero `nf` are not implemented.
 - Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
 - Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Strided memory, pipeline support, and several RVV operations remain unimplemented.
 
@@ -222,5 +239,7 @@ in `v4[0]` must be initialized before execution.
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
 instruction encoding, arithmetic, logical and selected bit-manipulation operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction/bit-count operations, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
-tail preservation, memory undo/redo, and unsupported vector memory forms.
-The full CMake test suite requires Qt 6.9.2 and GoogleTest. CI run #70 reports 100% tests passed with zero failures out of 338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped. It also smoke-tested all five runnable examples, including `vector_bitmanip.s`, and checked CLI vector configuration/register inspection. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.
+tail preservation, memory undo/redo, unsupported vector memory forms, and
+strided memory assembly/execution across SEWs, zero stride, negative stride
+with masking, and active-address store preflight. The strided-memory tests have been added
+but await the next CI run. The full CMake test suite requires Qt 6.9.2 and GoogleTest. CI run #70 reports 100% tests passed with zero failures out of 338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped. It also smoke-tested all five runnable examples present at that commit, including `vector_bitmanip.s`, and checked CLI vector configuration/register inspection. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.

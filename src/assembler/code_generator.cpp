@@ -32,6 +32,10 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
             else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
                      block.getOpcode() == "vcpop.v")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
+            else if (block.getOpcode().rfind("vlse", 0) == 0 ||
+                     block.getOpcode().rfind("vsse", 0) == 0)
+                code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() +
+                       "), " + block.getRs2();
             else if (block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
@@ -410,12 +414,18 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 code = (0b010010u << 26) | (vm << 25) | (rs1 << 20) |
                        (unary_vs1 << 15) | (0b010u << 12) | (rd << 7) | 0x57u;
             }
-            else if (block.getOpcode().rfind("vle", 0) == 0 ||
+            else if (block.getOpcode().rfind("vlse", 0) == 0 ||
+                     block.getOpcode().rfind("vsse", 0) == 0 ||
+                     block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
             {
+                const bool is_strided = block.getOpcode().rfind("vlse", 0) == 0 ||
+                                        block.getOpcode().rfind("vsse", 0) == 0;
                 const size_t dot = block.getOpcode().find('.');
+                const size_t prefix_length = is_strided ? 4u : 3u;
                 const uint32_t element_width =
-                    static_cast<uint32_t>(std::stoul(block.getOpcode().substr(3, dot - 3)));
+                    static_cast<uint32_t>(std::stoul(block.getOpcode().substr(
+                        prefix_length, dot - prefix_length)));
                 uint32_t width_encoding = 0;
                 switch (element_width)
                 {
@@ -426,10 +436,17 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 default:
                     throw std::runtime_error("Unsupported vector memory element width");
                 }
-                const uint32_t opcode = block.getOpcode().rfind("vle", 0) == 0 ? 0x07u : 0x27u;
-                // Unit-stride, one-field vector memory operation. vm=0 means v0.t.
+                const bool is_load = block.getOpcode().rfind("vle", 0) == 0 ||
+                                     block.getOpcode().rfind("vlse", 0) == 0;
+                const uint32_t opcode = is_load ? 0x07u : 0x27u;
+                const uint32_t mop = is_strided ? 0b10u : 0u;
+                const uint32_t stride_register = is_strided
+                    ? static_cast<uint32_t>(std::stoul(block.getRs2().substr(1)))
+                    : 0u;
+                // mop=00 is unit stride; mop=10 is strided. vm=0 means v0.t.
                 const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
-                code = (vm << 25) | (rs1 << 15) | (width_encoding << 12) | (rd << 7) | opcode;
+                code = (mop << 26) | (vm << 25) | (stride_register << 20) |
+                       (rs1 << 15) | (width_encoding << 12) | (rd << 7) | opcode;
             }
             else
             {

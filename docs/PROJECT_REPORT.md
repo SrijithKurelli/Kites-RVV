@@ -76,8 +76,16 @@ The supported vector memory forms are unit-stride one-field loads and stores
 for EEW 8, 16, 32, and 64 bits. EEW must equal the configured SEW. The active
 lanes transfer contiguously through the existing memory controller. Masked
 loads preserve inactive destination lanes; masked stores skip inactive
-addresses. Strided, indexed, segment, whole-register, and fault-only-first
-forms are outside this initial subset.
+addresses. Indexed, segment, whole-register, and fault-only-first forms are
+outside this initial subset.
+
+The selected strided forms `vlse8/16/32/64.v` and `vsse8/16/32/64.v` are
+also implemented. Their `rs2` GPR supplies a signed byte stride, so lane `i`
+accesses `base + i * stride`; the stride may be positive, zero, or negative.
+The implementation preserves inactive/tail destination elements, skips
+masked-off memory accesses, validates each active element's full address range,
+and stages stores before writing so a later invalid active lane cannot leave a
+partial store. Strided memory undo/redo is integrated with the existing history.
 
 ## 4. Tooling and state inspection
 
@@ -97,9 +105,9 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The five example programs under `examples/vector/` provide runnable
-load-compute-store, comparison/count, masked-memory, average, and selected
-bit-manipulation workflows.
+The six example programs under `examples/vector/` provide runnable
+load-compute-store, comparison/count, masked-memory, average,
+selected bit-manipulation, and strided-memory workflows.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
@@ -109,11 +117,15 @@ positive `5 / 2 = 2`, negative `-5 / 2 = -2`, truncation toward zero, and an
 explicit zero-count branch. The selected bit-manipulation tests cover assembler
 encoding/disassembly, per-element bit counts and AND-NOT/rotates for every
 supported SEW, plus masked bit-count preservation of inactive and tail elements.
+Strided-memory assembler/execution tests cover all SEWs, zero stride, negative
+stride with masking, and active-lane store preflight; these new tests await CI
+verification.
 CI run #70 (commit `8b70cf9`) reports 100% tests passed with 0 failures out of
 338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped.
 The workflow also built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
-executed all five runnable assembly examples on RVSS (including the bit-manipulation
-example), asserted that the average example prints `2`, and exercised the REPL
+executed all five then-existing runnable assembly examples on RVSS (including
+the bit-manipulation example), asserted that the average example prints `2`,
+and exercised the REPL
 `info` and `regs` commands by checking the reported vector configuration and
 vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42465927514).
 
@@ -123,8 +135,8 @@ vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kite
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
   8, 16, 32, and 64 bits.
 - Only the selected integer arithmetic, logical, comparison, reduction,
-  population-count, and unit-stride memory operations listed above are
-  implemented.
+  population-count, unit-stride memory, and strided memory operations listed
+  above are implemented.
 - `vsetivli`, `vsetvl`, other vector configuration encodings, and official
   vector CSRs are not implemented.
 - Tail and masked-off destination elements follow the undisturbed behavior
@@ -133,8 +145,9 @@ vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kite
 - Vector floating-point, fixed-point, widening/narrowing, and permutation
   operations are not implemented. Only the selected bit-manipulation subset
   described above is present; the remaining Zvbb operations are not implemented.
-- Strided/indexed/segment/fault-only-first/whole-register memory operations are
-  not implemented.
+- Indexed/segment/fault-only-first/whole-register memory operations are not
+  implemented. Strided memory is limited to the eight one-field EEW=SEW forms
+  listed above.
 - The implementation does not add a cycle-stepped vector unit, vector
   pipeline hazard handling, a complete RVV reference comparison, or the
   associated performance timing model.
@@ -144,7 +157,8 @@ vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kite
 The project scope identifies bit-manipulation operations, strided memory,
 cycle-stepped execution/performance modeling, pipeline integration, and
 independent reference comparisons as stretch work. The selected bit-count,
-AND-NOT, and rotate subset has now been implemented and CI-verified; the
-remaining bit-manipulation scope, strided memory, cycle-stepped model, pipeline
-integration, and independent reference comparison remain deferred. The
-limitations above make those boundaries explicit.
+AND-NOT, and rotate subset has been implemented and CI-verified. The selected
+strided-memory subset has been implemented, but its new CI verification is
+pending. Remaining bit-manipulation operations, indexed/segment memory, the
+cycle-stepped model, pipeline integration, and independent reference
+comparison remain deferred. The limitations above make those boundaries explicit.
