@@ -45,6 +45,17 @@ void PrintRegisters(std::ostream &os, RegisterFile &registers)
            << std::setfill('0') << registers.ReadCsr(address) << std::dec << std::setfill(' ')
            << "\n";
     }
+
+    const auto vectors = registers.GetVectorValues();
+    os << "Vector registers (128-bit):\n";
+    for (size_t i = 0; i < vectors.size(); ++i)
+    {
+        os << "  v" << std::left << std::setw(3) << i << " = 0x" << std::hex
+           << std::setfill('0');
+        for (size_t byte = vectors[i].size(); byte-- > 0;)
+            os << std::setw(2) << static_cast<unsigned>(vectors[i][byte]);
+        os << std::dec << std::setfill(' ') << "\n";
+    }
 }
 
 void PrintInfo(std::ostream &os, ProcessorManager &manager)
@@ -57,6 +68,18 @@ void PrintInfo(std::ostream &os, ProcessorManager &manager)
        << "IPC:                   " << manager.getIPC() << "\n"
        << "Stall cycles:          " << manager.getStallCycles() << "\n"
        << "Branch mispredictions: " << manager.getBranchMispredictions() << "\n";
+
+    if (manager.hasVectorState())
+    {
+        const uint8_t sew = manager.getVectorSew();
+        os << "Vector configuration:  VLEN=128, LMUL=1, SEW=" << static_cast<unsigned>(sew)
+           << ", VL=" << static_cast<unsigned>(manager.getVectorVl())
+           << ", VLMAX=" << (sew == 0 ? 0 : 128 / sew) << "\n";
+    }
+    else
+    {
+        os << "Vector configuration:  unavailable for this processor model\n";
+    }
 }
 
 void PrintBreakpoints(std::ostream &os, const command_handler::ReplState &state)
