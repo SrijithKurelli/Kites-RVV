@@ -138,6 +138,47 @@ TEST(VectorExtension, AverageExampleHandlesZeroMatchingElements)
     EXPECT_EQ(registers->ReadGpr(13), 0u);
 }
 
+TEST(VectorExtension, ScalarAndVectorSumsCompareDynamicInstructionCounts)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager scalar_manager(nullptr, Kites::ProcessorType::RVSS);
+    Kites::ProcessorManager vector_manager(nullptr, Kites::ProcessorType::RVSS);
+    scalar_manager.setStepDelay(0);
+    vector_manager.setStepDelay(0);
+
+    constexpr uint64_t data_address = 0x1000;
+    const uint32_t values[] = {1u, 2u, 3u, 4u};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        scalar_manager.getMemoryController()->writeWord(data_address + lane * 4, values[lane]);
+        vector_manager.getMemoryController()->writeWord(data_address + lane * 4, values[lane]);
+    }
+
+    scalar_manager.loadProgram(assembleVectorSource(
+        "lui x5, 1\n"
+        "lw x10, 0(x5)\n"
+        "lw x11, 4(x5)\n"
+        "lw x12, 8(x5)\n"
+        "lw x13, 12(x5)\n"
+        "add x14, x10, x11\n"
+        "add x14, x14, x12\n"
+        "add x14, x14, x13\n"));
+    vector_manager.loadProgram(assembleVectorSource(
+        "lui x5, 1\n"
+        "vsetvli x6, x0, 16\n"
+        "vle32.v v1, (x5)\n"
+        "vredsum.vs v2, v1, v3\n"));
+
+    scalar_manager.run();
+    vector_manager.run();
+
+    EXPECT_EQ(scalar_manager.getRegisterFile()->ReadGpr(14), 10u);
+    EXPECT_EQ(readElement(*vector_manager.getRegisterFile(), 2, 0, 4), 10u);
+    EXPECT_EQ(scalar_manager.getInstructionsRetired(), 8u);
+    EXPECT_EQ(vector_manager.getInstructionsRetired(), 4u);
+    EXPECT_LT(vector_manager.getInstructionsRetired(), scalar_manager.getInstructionsRetired());
+}
+
 TEST(VectorExtension, RegisterFileStoresAndResets128Bits)
 {
     Kites::RegisterFile registers;

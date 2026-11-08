@@ -26,9 +26,10 @@ Last updated: 2026-11-08
 | Assembler, decoder and execution integration | Partial | Current subset is wired end-to-end; expand as instructions are added. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Partial | Load-compute-store, comparison, and average examples documented; automated tests cover average and zero-count behavior. Continue expanding representative end-to-end examples. |
-| Scalar regression | Baseline CI passed; latest commits unverified | The previously observed Actions run passed 330 tests with 0 failures. Subsequent CLI-inspection and average-example commits still require a fresh CI run. The earlier run showed a non-blocking Node.js 20 deprecation warning for `actions/checkout@v4`. |
-| Short design/validation/limitations report | Not started | Prepare after core behavior and regression results stabilize. |
+| Assembly examples and automated tests | Implemented for current subset | Runnable files cover load-add-store, comparison/count, masked add/store, and average; automated tests cover encodings, supported SEWs, masks, bounds, undo/redo, average, and zero-count guard. |
+| Scalar regression | Verification pending for latest batch | Preserve the full scalar suite and record the latest Actions result once the current run completes. The previous passing baseline had 330 passed and 0 failed; it predates the recent CLI and average tests. |
+| Scalar-vs-vector instruction-count comparison | Added; CI verification pending | Automated four-element sum test checks equal results and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
+| Short design/validation/limitations report | Drafted | `docs/PROJECT_REPORT.md` summarizes architecture, supported instructions, validation approach, and known/deferred limitations; refresh test results after the final green CI run. |
 
 ## Stretch scope
 

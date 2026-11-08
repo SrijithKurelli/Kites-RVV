@@ -1,164 +1,115 @@
 # Using the Kites CLI
 
-`kites-cli` is a headless build of the Kites simulator: it assembles a RISC-V
-`.s` file, runs it on the chosen VM, and writes the results (registers,
-disassembly, and optionally a memory dump) to disk. It needs no display and no
-`QApplication` — it links the same `kites_core` the GUI uses, built with
-`DISABLE_GUI` defined.
-
-> **Status:** the CLI assembles and runs a program end-to-end and dumps
-> register/disassembly/memory state. It does not yet support interactive
-> debugging (breakpoints, step, undo/redo) from the command line — those are
-> driven through `command_handler`, whose `ExecuteCommand` is currently a stub.
+`kites-cli` provides both a batch runner and an interactive REPL for the Kites
+simulator. It is a headless build: it assembles the selected RISC-V source,
+runs it on the requested processor model, and writes register, disassembly,
+error, and optional memory dumps under `vm_state/`.
 
 ## Building
 
-The CLI target is built automatically alongside the GUI app; no extra CMake
-option is required.
+The CLI target is built with the regular CMake project:
 
 ```bash
-cmake -B build -DCMAKE_PREFIX_PATH="path/to/Qt/6.x.x/<compiler>" .
+cmake -B build -DCMAKE_PREFIX_PATH="path/to/Qt/6.9.2/<compiler>" .
 cmake --build build --target kites_cli
 ```
 
-The resulting binary is `kites-cli` (`build/kites-cli`, or
-`build/<config>/kites-cli.exe` on multi-config generators like Visual Studio).
+The resulting executable is `build/kites-cli` (or
+`build/<config>/kites-cli.exe` on multi-config generators).
 
-## Usage
+## Batch mode
 
-```
+```text
 kites-cli <assembly-file> [--vm <name>] [--mem-dump <hex_addr> <row_count>]...
 ```
 
-| Argument       | Description                                                                          |
-|----------------|---------------------------------------------------------------------------------------|
-| `<assembly-file>` | Path to the `.s` file to assemble and run. Required.                              |
-| `--vm <name>`  | Which VM to run on (see table below). Defaults to `rvss`.                            |
-| `--mem-dump <hex_addr> <row_count>` | Dump `<row_count>` 8-byte rows of memory starting at `<hex_addr>` after the run. Repeatable — pass it multiple times to dump several regions in one invocation. |
+An assembly file without `--repl` is assembled and run to completion. The
+`--mem-dump` option is repeatable and writes the selected 8-byte memory rows
+after execution.
 
-### `--vm` values
+### Processor models
 
-| Name        | `ProcessorType`         | Description                                   |
-|-------------|-------------------------|------------------------------------------------|
-| `rvss`      | `RVSS`                  | Single-cycle (default). Supports I, M, D, F, and the initial vector subset described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). |
-| `rv5-nh-nf` | `RV5Stage_NH_NF`        | 5-stage pipeline, no hazard detection, no forwarding. |
-| `rv5-h-nf`  | `RV5Stage_H_NF`         | 5-stage pipeline, hazard detection, no forwarding. |
-| `rv5-nh-f`  | `RV5Stage_NH_F`         | 5-stage pipeline, no hazard detection, forwarding. |
-| `rv5-h-f`   | `RV5Stage_H_F`          | 5-stage pipeline, hazard detection, forwarding. |
+| Name | Processor model | Vector support |
+|---|---|---|
+| `rvss` | Single-cycle RVSS | Supports the initial vector subset described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). |
+| `rv5-nh-nf` | Five-stage, no hazard detection, no forwarding | Vector instructions are not implemented. |
+| `rv5-h-nf` | Five-stage, hazard detection, no forwarding | Vector instructions are not implemented. |
+| `rv5-nh-f` | Five-stage, no hazard detection, forwarding | Vector instructions are not implemented. |
+| `rv5-h-f` | Five-stage, hazard detection, forwarding | Vector instructions are not implemented. |
 
-The pipelined VMs currently support the I and M extensions only (D/F
-pipelined support is planned).
-
-## Example
+### Example
 
 ```bash
-cat > /tmp/hello.s <<'EOF'
-li   a0, 42       # value to print
-li   a7, 1        # SYSCALL_PRINT_INT
-ecall
-
-li   a0, 0        # exit code
-li   a7, 10       # SYSCALL_EXIT
-ecall
-EOF
-
-./build/kites-cli /tmp/hello.s --vm rv5-h-f
+./build/kites-cli examples/vector/vector_load_add_store.s --vm rvss
 ```
 
-Sample output:
+The batch run prints program output to stdout and writes state files below
+`vm_state/`. Vector register values are included in
+`registers_dump.json` under `vec_registers`.
 
-```
-[Syscall output: 42]
-Exited with exit code: 0
-Assembled '/tmp/hello.s': 4 instruction word(s), 0 data item(s).
-Run completed.
-Registers   -> /tmp/vm_state/registers_dump.json
-Disassembly -> /tmp/vm_state/disassembly.txt
-Errors      -> /tmp/vm_state/errors_dump.json
-```
+## Interactive REPL
 
-Dumping a region of memory in the same run:
+Use `--repl` (or `-i`) to enter the REPL. With no assembly file, the CLI
+starts an empty REPL; with a file, it loads that program before showing the
+prompt.
 
 ```bash
-./build/kites-cli /tmp/hello.s --mem-dump 0 4 --mem-dump 100 2
+./build/kites-cli --repl
+./build/kites-cli examples/vector/vector_load_add_store.s --repl
 ```
 
-adds a `Memory -> .../vm_state/memory_dump.json` line and writes both
-requested regions (4 rows starting at address `0x0`, then 2 rows starting at
-`0x100`) to that file.
+The REPL supports the following commands:
 
-## Program output during the run
+| Command | Purpose |
+|---|---|
+| `load <file> [--vm <name>]` | Assemble and load a program, optionally changing processor model. |
+| `run` | Run the loaded program to completion. |
+| `step [n]` / `s [n]` | Execute one instruction or the requested positive number of instructions. |
+| `run_debug` / `rd` | Request the debug-paused execution state. Use `step` to advance manually. |
+| `undo` / `u` | Reverse the last executed instruction(s) on processor models that implement undo. |
+| `redo` / `r` | Replay an undone instruction. |
+| `reset` | Reset the selected VM. |
+| `add_breakpoint <line>` | Add a source-line breakpoint. |
+| `remove_breakpoint <line>` | Remove a source-line breakpoint. |
+| `breakpoints` | List configured source-line breakpoints. |
+| `modify_register <reg> <value>` / `mreg` | Modify a scalar register or CSR. 128-bit vector registers cannot be changed through this 64-bit command. |
+| `regs` | Print GPRs, FPRs, CSRs, and all 32 128-bit vector registers. |
+| `info` | Print PC and execution counters; on RVSS, also print VLEN, LMUL, SEW, VL, and VLMAX. |
+| `disas` | Print the loaded program's disassembly. |
+| `print_mem <hex_addr> <rows>` / `pmem` | Print memory rows. |
+| `dump_mem <addr> <rows> [<addr> <rows>]...` / `dmem` | Dump one or more memory ranges to the memory dump file. |
+| `vm_stdin <text>` / `vmsin` | Feed text to a program blocked on a supported read syscall. |
+| `stop` | Request a stop of the current run. |
+| `help` | Show command help. |
+| `exit` / `quit` / `q` | Leave the REPL. |
 
-Programs that execute `ecall` for I/O print directly to the CLI's stdout
-while running, wrapped in a marker so it's easy to spot in mixed output:
+The `info` command reports vector configuration only for RVSS because the
+five-stage pipeline processors do not currently implement this vector subset.
+The `modify_register` command is scalar-width only; vector register inspection
+is supported through `regs` and `registers_dump.json`.
 
-```
-[Syscall output: <value or string>]
-```
+## State output files
 
-`PRINT_INT` (`a7=1`), `PRINT_FLOAT` (`a7=2`), `PRINT_DOUBLE` (`a7=3`), and
-`PRINT_STRING` (`a7=4`) all print this way; `EXIT` (`a7=10`) prints
-`Exited with exit code: <code>`.
+All state files are written under the platform's Kites `vm_state/` directory.
 
-**Known limitation:** a program that hits a blocking `READ` syscall (`a7=63`)
-will hang forever — the CLI doesn't yet feed terminal stdin into the VM's
-input queue. Avoid programs that read from stdin until this is implemented.
+| File | Contents |
+|---|---|
+| `registers_dump.json` | CSRs, all GPRs, all FPRs, and all 32 128-bit vector registers. |
+| `disassembly.txt` | Human-readable disassembly, labels, instruction addresses, and raw words. |
+| `errors_dump.json` | Empty error list on successful assembly, or parse diagnostics. |
+| `memory_dump.json` | Only written when `--mem-dump` or `dump_mem` is used. |
 
-## Output files
+The JSON vector-register section is named `vec_registers`; each register is
+represented as a 32-hex-digit value.
 
-All state is written under a `vm_state/` directory rather than to stdout, so
-it can be consumed by scripts or other tooling. The directory location
-depends on platform:
+## I/O and known limitations
 
-- **Windows / Linux:** `<current working directory>/vm_state/`
-- **macOS:** `~/Library/Application Support/Kites/vm_state/`
+Batch programs can use the supported print and exit syscalls. A program that
+reaches a blocking stdin read in batch mode can wait indefinitely because the
+batch runner does not supply interactive input. Use the REPL's `vm_stdin`
+command for supported interactive reads.
 
-| File                    | Written                        | Contents                                                     |
-|-------------------------|---------------------------------|----------------------------------------------------------------|
-| `disassembly.txt`       | Always, on successful assembly  | Human-readable disassembly with address labels and raw hex words. |
-| `errors_dump.json`      | Always                          | `{"errorCode": 0, "errors": []}` on success, or a list of `{line, message}` objects on assembly failure. |
-| `registers_dump.json`   | Always, after the run           | CSRs, all 32 GPRs (`x0`-`x31`), all 32 FPRs (`f0`-`f31`), and all 32 128-bit vector registers (`v0`-`v31`), each as a hex string. |
-| `memory_dump.json`      | Only if `--mem-dump` was passed | One entry per 8-byte word in the requested address ranges, keyed by hex address, e.g. `"0x0000000000000000": "0x002a000000000000"`. |
-
-### `registers_dump.json` shape
-
-```json
-{
-    "control and status registers": {
-        "...": "0x..."
-    },
-    "gp_registers": {
-        "x0" : "0x0000000000000000",
-        "x1" : "0x0000000000000000",
-        ...
-    },
-    "fp_registers": {
-        "f0" : "0x0000000000000000",
-        ...
-    },
-    "vec_registers": {
-        "v0" : "0x00000000000000000000000000000000",
-        ...
-    }
-}
-```
-
-## Exit codes
-
-| Code | Meaning                                                             |
-|------|----------------------------------------------------------------------|
-| `0`  | Assembled and ran successfully.                                      |
-| `1`  | Bad invocation (missing file argument, unknown `--vm` value, unknown flag) or assembly failed — see `errors_dump.json` and stderr. |
-| `2`  | Assembly succeeded but the run raised a runtime error — see stderr for the message. |
-| `3`  | The run succeeded but writing the `--mem-dump` output failed (e.g. malformed hex address). |
-
-## Notes
-
-- `--vm` and `--mem-dump` may appear in any order after the file argument,
-  and `--mem-dump` may be repeated.
-- Instruction step delay (used to pace the GUI's per-instruction animation)
-  is forced to `0`, so the CLI runs a program at full speed regardless of the
-  GUI's configured delay.
-- See [../CLAUDE.md](../CLAUDE.md) for the broader architecture, and
-  [TESTING.md](TESTING.md) for how the test suite (which covers the VM core
-  the CLI drives) is built and run.
+This CLI and vector subset are still an incremental simulator extension, not
+a claim of full RVV 1.0 or full pipeline vector support. See
+[VECTOR_EXTENSION.md](VECTOR_EXTENSION.md) for exact supported instruction
+forms and limitations.

@@ -1,0 +1,25 @@
+# RVSS vector examples
+
+These files target the initial RVSS vector subset. Run them from the repository
+root after building `kites-cli`:
+
+```bash
+./build/kites-cli examples/vector/vector_load_add_store.s --vm rvss
+./build/kites-cli examples/vector/vector_compare_count.s --vm rvss
+./build/kites-cli examples/vector/vector_masked_add_store.s --vm rvss
+./build/kites-cli examples/vector/vector_average_selected.s --vm rvss
+```
+
+Expected results:
+
+| Program | Expected result |
+|---|---|
+| `vector_load_add_store.s` | `v3` contains [11, 22, 33, 44]; those values are stored at `result`. |
+| `vector_compare_count.s` | `v0` has predicate bits 0 and 2 set; `x10 = 2`. |
+| `vector_masked_add_store.s` | Predicate bits 0, 2, and 3 are set; active result lanes are 7, 3, and 17. Inactive result lane 1 remains -1 in memory. |
+| `vector_average_selected.s` | The selected values are 1 and 4; sum=5, count=2, integer average=2. The program prints `2`. |
+
+The average example uses a signed scalar `div`, which truncates toward zero.
+When no elements match, its branch sets the result to zero. All examples use
+SEW=32 and VL=4. They exercise the supported subset, not general RVV 1.0
+programs.

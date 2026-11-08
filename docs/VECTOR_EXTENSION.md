@@ -109,6 +109,17 @@ record their memory changes so the simulator's undo/redo mechanism can reverse
 and replay them. Masked forms use the `v0` predicate and skip inactive lanes; strided, indexed, and segment memory operations are
 not supported.
 
+## Runnable example programs
+
+The repository includes end-to-end assembly examples in `examples/vector/`:
+
+- `vector_load_add_store.s` — unit-stride load, vector add, and store.
+- `vector_compare_count.s` — compare corresponding elements and count matches.
+- `vector_masked_add_store.s` — compare, masked arithmetic, and masked store.
+- `vector_average_selected.s` — masked sum, population count, zero-count guard, and integer average.
+
+See `examples/vector/README.md` for commands and expected results.
+
 ## Current limitations
 
 - Vector instructions are implemented only in the RVSS single-cycle processor.
