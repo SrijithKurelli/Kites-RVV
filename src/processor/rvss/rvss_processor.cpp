@@ -1002,7 +1002,7 @@ void RVSSProcessor::WriteMemory()
                 pending_stores.push_back(std::move(pending));
             }
 
-            // All active addresses have been validated before the first write.
+            // All active-lane undo snapshots are collected before the first write.
             for (const auto &pending : pending_stores)
             {
                 writeVectorMemoryElement(memory_controller_, pending.address,
