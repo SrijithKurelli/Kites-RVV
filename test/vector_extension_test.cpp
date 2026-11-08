@@ -593,6 +593,30 @@ TEST(VectorExtension, MaskedVectorMemorySkipsInactiveLanesAndSupportsUndoRedo)
     EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 2), 0x12u);
     EXPECT_EQ(vm.memory_controller_.readByte(destination_address + 3), 0xA3u);
 }
+TEST(VectorExtension, MaskedStoreDoesNotAccessInactiveOutOfRangeLane)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    const uint64_t last_valid_address = Kites::vm_config::config.getMemorySize() - 1;
+    vm.registers_.WriteGpr(5, 2);
+    vm.registers_.WriteGpr(8, last_valid_address);
+    vm.registers_.WriteVectorByte(0, 0, 0x01u); // Only lane 0 is active.
+    vm.registers_.WriteVectorByte(1, 0, 0x5Au);
+    vm.registers_.WriteVectorByte(1, 1, 0xA5u);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\\n"
+        "vse8.v v1, (x8), v0.t\\n"));
+    vm.Step();
+    EXPECT_NO_THROW(vm.Step());
+    EXPECT_EQ(vm.memory_controller_.readByte(last_valid_address), 0x5Au);
+
+    vm.Undo();
+    EXPECT_EQ(vm.memory_controller_.readByte(last_valid_address), 0u);
+    vm.Redo();
+    EXPECT_EQ(vm.memory_controller_.readByte(last_valid_address), 0x5Au);
+}
+
 TEST(VectorExtension, UnsupportedVtypeIsRejectedByAssembler)
 {
     EXPECT_THROW(assembleVectorSource("vsetvli x5, x6, 32\n"), std::runtime_error);
