@@ -261,6 +261,23 @@ RegisterFile *ProcessorManager::getRegisterFile() const
     return &m_currentProcessor->registers_;
 }
 
+bool ProcessorManager::hasVectorState() const
+{
+    return dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get()) != nullptr;
+}
+
+uint8_t ProcessorManager::getVectorSew() const
+{
+    const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get());
+    return processor ? processor->vector_sew_ : 0;
+}
+
+uint8_t ProcessorManager::getVectorVl() const
+{
+    const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get());
+    return processor ? processor->vector_vl_ : 0;
+}
+
 MemoryController *ProcessorManager::getMemoryController() const
 {
     return &m_currentProcessor->memory_controller_;
