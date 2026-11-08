@@ -972,33 +972,52 @@ void RVSSProcessor::WriteMemory()
         else
         {
             const auto source = registers_.ReadVector(vector_register);
-            std::vector<uint8_t> old_bytes;
-            std::vector<uint8_t> new_bytes;
-            old_bytes.reserve(transferred_bytes);
-            new_bytes.reserve(transferred_bytes);
 
-            for (size_t byte = 0; byte < transferred_bytes; ++byte)
-                old_bytes.push_back(memory_controller_.peekByte(base_address + byte));
+            // Stage only active lanes. Masked-off lanes must not be read or written,
+            // including for undo bookkeeping: they may refer to inaccessible memory.
+            struct PendingVectorStore
+            {
+                uint64_t address;
+                uint64_t value;
+                std::vector<uint8_t> old_bytes;
+            };
+            std::vector<PendingVectorStore> pending_stores;
+            pending_stores.reserve(vector_vl_);
 
             for (size_t lane = 0; lane < vector_vl_; ++lane)
             {
                 if (!lane_is_active(lane))
                     continue;
-                uint64_t value = 0;
-                const size_t offset = lane * element_bytes;
-                for (size_t byte = 0; byte < element_bytes; ++byte)
-                    value |= static_cast<uint64_t>(source[offset + byte]) << (8 * byte);
 
-                writeVectorMemoryElement(memory_controller_,
-                                         base_address + offset, element_bytes, value);
+                const size_t offset = lane * element_bytes;
+                PendingVectorStore pending{base_address + offset, 0, {}};
+                pending.old_bytes.reserve(element_bytes);
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                {
+                    pending.value |=
+                        static_cast<uint64_t>(source[offset + byte]) << (8 * byte);
+                    pending.old_bytes.push_back(
+                        memory_controller_.peekByte(pending.address + byte));
+                }
+                pending_stores.push_back(std::move(pending));
             }
 
-            for (size_t byte = 0; byte < transferred_bytes; ++byte)
-                new_bytes.push_back(memory_controller_.peekByte(base_address + byte));
+            // All active addresses have been validated before the first write.
+            for (const auto &pending : pending_stores)
+            {
+                writeVectorMemoryElement(memory_controller_, pending.address,
+                                         element_bytes, pending.value);
 
-            if (old_bytes != new_bytes)
-                current_delta_.memory_changes.push_back(
-                    {base_address, old_bytes, new_bytes});
+                std::vector<uint8_t> new_bytes;
+                new_bytes.reserve(element_bytes);
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    new_bytes.push_back(
+                        memory_controller_.peekByte(pending.address + byte));
+
+                if (pending.old_bytes != new_bytes)
+                    current_delta_.memory_changes.push_back(
+                        {pending.address, pending.old_bytes, new_bytes});
+            }
         }
         return;
     }
