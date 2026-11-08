@@ -189,7 +189,7 @@ in `v4[0]` must be initialized before execution.
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions, mask population count, average-from-sum/count rounding and zero-count handling,
+instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, and unsupported vector memory forms.
 The full CMake test suite requires Qt 6.9.2 and GoogleTest. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.

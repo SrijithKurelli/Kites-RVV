@@ -66,14 +66,23 @@ jobs:
       - name: Build CLI and test suite
         run: cmake --build build/ci --target kites_cli kites_test --parallel 2
 
-      - name: Smoke-test RVSS vector examples
+      - name: Smoke-test RVSS vector examples and CLI inspection
+        shell: bash
         run: |
           set -euo pipefail
           for example in examples/vector/*.s; do
             echo "::group::Smoke test ${example}"
-            ./build/ci/kites-cli "${example}" --vm rvss
+            output="$(./build/ci/kites-cli "${example}" --vm rvss)"
+            printf '%s\\n' "$output"
+            if [[ "$example" == *vector_average_selected.s ]]; then
+              grep -Fq '[Syscall output: 2]' <<< "$output"
+            fi
             echo "::endgroup::"
           done
+
+          repl_output="$(printf 'info\\nregs\\nexit\\n' | ./build/ci/kites-cli examples/vector/vector_load_add_store.s --repl)"
+          grep -Fq 'VLEN=128, LMUL=1' <<< "$repl_output"
+          grep -Fq 'Vector registers (128-bit):' <<< "$repl_output"
 
       - name: Run tests
         env:

@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-08
+Last updated: 2026-11-08 (after CI run #64)
 
 ## Must-have core scope
 
@@ -23,13 +23,13 @@ Last updated: 2026-11-08
 | Masked execution | Implemented subset | Optional `, v0.t` on vector-vector ops, reductions, `vcpop.m`, and unit-stride loads/stores; inactive destination lanes are undisturbed. |
 | Inactive and tail element handling | Implemented for current subset | `vta=vma=0` behavior: masked-off and tail destination elements remain unchanged; masked stores skip inactive lanes. |
 | Unit-stride vector loads/stores | Implemented subset; CI coverage present | `vle8/16/32/64.v`, `vse8/16/32/64.v`; masked and unmasked forms; requires EEW=SEW. |
-| Assembler, decoder and execution integration | Partial | Current subset is wired end-to-end; expand as instructions are added. |
+| Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented for current subset | Runnable files cover load-add-store, comparison/count, masked add/store, and average; automated tests cover encodings, supported SEWs, masks, bounds, undo/redo, average, and zero-count guard. |
-| Scalar regression | Verification pending for latest batch | Preserve the full scalar suite and record the latest Actions result once the current run completes. The previous passing baseline had 330 passed and 0 failed; it predates the recent CLI and average tests. |
-| Scalar-vs-vector instruction-count comparison | Added; CI verification pending | Automated four-element sum test checks equal results and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
-| Short design/validation/limitations report | Drafted | `docs/PROJECT_REPORT.md` summarizes architecture, supported instructions, validation approach, and known/deferred limitations; refresh test results after the final green CI run. |
+| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #64; 334 CTest tests passed. Tests cover encodings, supported SEWs, masks, bounds, undo/redo, positive/negative average division, and the zero-count guard. |
+| Scalar regression | Verified | CI run #64 passed the full CTest suite: 334 passed, 0 failed (20.72 seconds), including the existing scalar regression tests. |
+| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | Automated four-element sum test checks equal results and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
+| Short design/validation/limitations report | Drafted; validation evidence refreshed | `docs/PROJECT_REPORT.md` summarizes architecture, supported instructions, validation approach, and known/deferred limitations; it records CI run #64 as the latest verified baseline. Final editorial review remains. |
 
 ## Stretch scope
 
