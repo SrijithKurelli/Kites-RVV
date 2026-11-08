@@ -60,6 +60,16 @@ caller handles a zero count explicitly; the example chooses zero. The
 reduction wraps modulo SEW, so callers must ensure their sum is in range for
 the intended scalar division.
 
+### Selected bit manipulation
+
+A selected Zvbb-style subset is implemented and covered by CI tests:
+
+- `vclz.v`, `vctz.v`, and `vcpop.v` compute leading-zero, trailing-zero, and set-bit counts independently for each active SEW-sized element. A zero input to either zero-count operation returns the configured SEW.
+- `vandn.vv` computes `vs2 & ~vs1` element-wise.
+- `vrol.vv` and `vror.vv` rotate each element left or right; only the low `log2(SEW)` bits of the corresponding rotate amount are used.
+
+These operations accept the optional `, v0.t` mask form. Masked-off and tail destination elements remain undisturbed. This is only the selected subset listed above, not complete Zvbb support; vector-scalar and vector-immediate forms and other Zvbb instructions are not implemented.
+
 ### Memory
 
 The supported vector memory forms are unit-stride one-field loads and stores
@@ -87,21 +97,25 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The example programs under `examples/vector/` provide runnable
-load-compute-store, comparison/count, masked-memory, and average workflows.
+The five example programs under `examples/vector/` provide runnable
+load-compute-store, comparison/count, masked-memory, average, and selected
+bit-manipulation workflows.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
 This count comparison is a simple architectural metric; it does not claim a
 wall-clock speedup or a cycle-accurate timing model. The average tests cover
 positive `5 / 2 = 2`, negative `-5 / 2 = -2`, truncation toward zero, and an
-explicit zero-count branch. CI run #67 (commit `39a079a`) passed all 334 enabled
-CTest tests with 0 failures in 39.30 seconds; three separately disabled CTest
-entries remained disabled. The workflow also executed all four runnable assembly
-examples on RVSS, asserted that the average example prints `2`, and exercised
-the REPL `info` and `regs` commands by checking the reported vector configuration
-and vector-register section. The workflow builds the CLI and suite under Linux
-with Qt 6.9.2 and GCC. See [CI run #67](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42458958352).
+explicit zero-count branch. The selected bit-manipulation tests cover assembler
+encoding/disassembly, per-element bit counts and AND-NOT/rotates for every
+supported SEW, plus masked bit-count preservation of inactive and tail elements.
+CI run #70 (commit `8b70cf9`) reports 100% tests passed with 0 failures out of
+338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped.
+The workflow also built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
+executed all five runnable assembly examples on RVSS (including the bit-manipulation
+example), asserted that the average example prints `2`, and exercised the REPL
+`info` and `regs` commands by checking the reported vector configuration and
+vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42465927514).
 
 ## 6. Known limitations
 
@@ -116,9 +130,11 @@ with Qt 6.9.2 and GCC. See [CI run #67](https://github.com/SrijithKurelli/Kites-
 - Tail and masked-off destination elements follow the undisturbed behavior
   implemented by this subset. Full RVV agnostic policies, register groups,
   and illegal group-overlap rules are outside the implementation boundary.
-- Vector floating-point, fixed-point, widening/narrowing, permutation, bit
-  manipulation, strided/indexed/segment/fault-only-first/whole-register
-  memory operations are not implemented.
+- Vector floating-point, fixed-point, widening/narrowing, and permutation
+  operations are not implemented. Only the selected bit-manipulation subset
+  described above is present; the remaining Zvbb operations are not implemented.
+- Strided/indexed/segment/fault-only-first/whole-register memory operations are
+  not implemented.
 - The implementation does not add a cycle-stepped vector unit, vector
   pipeline hazard handling, a complete RVV reference comparison, or the
   associated performance timing model.
@@ -127,6 +143,8 @@ with Qt 6.9.2 and GCC. See [CI run #67](https://github.com/SrijithKurelli/Kites-
 
 The project scope identifies bit-manipulation operations, strided memory,
 cycle-stepped execution/performance modeling, pipeline integration, and
-independent reference comparisons as stretch work. They are deferred from
-this initial core milestone; the limitations above make those boundaries
-explicit.
+independent reference comparisons as stretch work. The selected bit-count,
+AND-NOT, and rotate subset has now been implemented and CI-verified; the
+remaining bit-manipulation scope, strided memory, cycle-stepped model, pipeline
+integration, and independent reference comparison remain deferred. The
+limitations above make those boundaries explicit.

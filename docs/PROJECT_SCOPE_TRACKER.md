@@ -2,13 +2,13 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-08 (after successful CI run #67)
+Last updated: 2026-11-08 (after successful CI run #70)
 
 ## Must-have core scope
 
 | Scope item | Status | Evidence / remaining work |
 |---|---|---|
-| 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #67. |
+| 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #70. |
 | SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
 | Vector configuration / AVL rules | Implemented for selected `vsetvli` forms | Includes `rs1=x0` and `rd=x0` special handling and regression tests. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
@@ -26,17 +26,17 @@ Last updated: 2026-11-08 (after successful CI run #67)
 | Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #67; the average example's output `2` was asserted. The negative signed-average regression, zero-count branch, and CLI `info`/`regs` checks passed. |
-| Scalar regression | Verified | CI run #67 passed all 334 enabled CTest tests, with 0 failures (39.30 seconds); 3 separately disabled CTest entries remained disabled. This includes existing scalar regressions. |
-| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | CI run #67 verifies a four-element sum with equal result and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
-| Short design/validation/limitations report | Completed for the initial core milestone | `docs/PROJECT_REPORT.md` summarizes architecture, implemented subset, validation evidence from CI run #67, and all known/deferred limitations. Final team review before submission remains advisable. |
+| Assembly examples and automated tests | Implemented and CI-verified for current subset | All five runnable examples completed in CI run #70, including `vector_bitmanip.s`; the average example's output `2` was asserted. The negative signed-average regression, zero-count branch, and CLI `info`/`regs` checks passed. |
+| Scalar regression | Verified | CI run #70 reports 100% tests passed with 0 failures out of 338 CTest tests (20.10 seconds). Four tests were disabled and one test was skipped. This includes existing scalar regressions. |
+| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | CI run #70 verifies a four-element sum with equal result and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
+| Short design/validation/limitations report | Completed for the initial core milestone | `docs/PROJECT_REPORT.md` summarizes architecture, the core subset plus selected bit-manipulation stretch work, validation evidence from CI run #70, and known/deferred limitations. Final team review before submission remains advisable. |
 
 ## Stretch scope
 
 | Stretch item | Status | Planned validation |
 |---|---|---|
-| Bit counts | Partially implemented; CI verification pending | Added per-element `vclz.v`, `vctz.v`, and `vcpop.v`; tests cover zero input, all supported SEWs, masking, and tail preservation. |
-| AND-NOT and rotate operations | Partially implemented; CI verification pending | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; tests cover all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
+| Bit counts | Partially implemented; CI-verified | Added per-element `vclz.v`, `vctz.v`, and `vcpop.v`; CI #70 passed tests for zero input, all supported SEWs, masking, and tail preservation. |
+| AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Not started | Positive/negative stride, zero stride if supported, and bounds cases. |
 | Cycle-stepped vector-unit model | Not started | Explicit operation latency, lanes, dependencies and memory delays. |
 | Execution traces and performance statistics | Not started | Stable trace format, cycle/instruction counters, scalar-vs-vector kernel comparison. |
@@ -58,7 +58,7 @@ Last updated: 2026-11-08 (after successful CI run #67)
 - Current vector arithmetic includes `vadd.vv` and `vsub.vv`; logical operations include `vand.vv`, `vor.vv`, and `vxor.vv`. These support optional `v0.t` predication.
 - Current vector comparisons are `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`; they produce packed predicate bits and support optional masking.
 - Current vector memory support is unit-stride, one-field load/store with EEW=SEW; optional `v0.t` masks skip inactive lanes.
-- Selected Zvbb-style instructions now cover element bit counts, vector AND-NOT, and vector rotates; they do not constitute full Zvbb support.
+- Selected Zvbb-style instructions now cover element bit counts (`vclz.v`, `vctz.v`, `vcpop.v`), vector AND-NOT (`vandn.vv`), and vector rotates (`vrol.vv`, `vror.vv`). These have encoding/disassembly and execution coverage in CI #70; they do not constitute full Zvbb support.
 - This is an incremental RVV subset, not a claim of full RVV 1.0 compliance.
 
 ## Working rules
