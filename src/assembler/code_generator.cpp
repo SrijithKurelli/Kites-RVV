@@ -29,6 +29,9 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
             else if (block.getOpcode() == "vcpop.m")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
+            else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
+                     block.getOpcode() == "vcpop.v")
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
             else if (block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
@@ -396,6 +399,17 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 code = (0b010000u << 26) | (vm << 25) | (vs2 << 20) |
                        (0b10000u << 15) | (0b110u << 12) | (rd << 7) | 0x57u;
             }
+            else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
+                     block.getOpcode() == "vcpop.v")
+            {
+                uint32_t unary_vs1 = 0;
+                if (block.getOpcode() == "vclz.v") unary_vs1 = 0b01100;
+                else if (block.getOpcode() == "vctz.v") unary_vs1 = 0b01101;
+                else unary_vs1 = 0b01110;
+                const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
+                code = (0b010010u << 26) | (vm << 25) | (rs1 << 20) |
+                       (unary_vs1 << 15) | (0b010u << 12) | (rd << 7) | 0x57u;
+            }
             else if (block.getOpcode().rfind("vle", 0) == 0 ||
                      block.getOpcode().rfind("vse", 0) == 0)
             {
@@ -434,9 +448,12 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 else if (mnemonic == "vredmax.vs") { funct6 = 0b000111; funct3 = 0b010; }
                 else if (mnemonic == "vadd.vv") funct6 = 0b000000;
                 else if (mnemonic == "vsub.vv") funct6 = 0b000010;
+                else if (mnemonic == "vandn.vv") funct6 = 0b000001;
                 else if (mnemonic == "vand.vv") funct6 = 0b001001;
                 else if (mnemonic == "vor.vv") funct6 = 0b001010;
                 else if (mnemonic == "vxor.vv") funct6 = 0b001011;
+                else if (mnemonic == "vror.vv") funct6 = 0b010100;
+                else if (mnemonic == "vrol.vv") funct6 = 0b010101;
                 else if (mnemonic == "vmseq.vv") funct6 = 0b011000;
                 else if (mnemonic == "vmsne.vv") funct6 = 0b011001;
                 else if (mnemonic == "vmsltu.vv") funct6 = 0b011010;

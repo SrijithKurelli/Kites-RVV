@@ -35,8 +35,8 @@ Last updated: 2026-11-08 (after successful CI run #67)
 
 | Stretch item | Status | Planned validation |
 |---|---|---|
-| Bit counts | Not started | Lane-wise results and boundary tests for each SEW. |
-| AND-NOT and rotate operations | Not started | Verify bit semantics and element-width masking. |
+| Bit counts | Partially implemented; CI verification pending | Added per-element `vclz.v`, `vctz.v`, and `vcpop.v`; tests cover zero input, all supported SEWs, masking, and tail preservation. |
+| AND-NOT and rotate operations | Partially implemented; CI verification pending | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; tests cover all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Not started | Positive/negative stride, zero stride if supported, and bounds cases. |
 | Cycle-stepped vector-unit model | Not started | Explicit operation latency, lanes, dependencies and memory delays. |
 | Execution traces and performance statistics | Not started | Stable trace format, cycle/instruction counters, scalar-vs-vector kernel comparison. |
@@ -58,6 +58,7 @@ Last updated: 2026-11-08 (after successful CI run #67)
 - Current vector arithmetic includes `vadd.vv` and `vsub.vv`; logical operations include `vand.vv`, `vor.vv`, and `vxor.vv`. These support optional `v0.t` predication.
 - Current vector comparisons are `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`; they produce packed predicate bits and support optional masking.
 - Current vector memory support is unit-stride, one-field load/store with EEW=SEW; optional `v0.t` masks skip inactive lanes.
+- Selected Zvbb-style instructions now cover element bit counts, vector AND-NOT, and vector rotates; they do not constitute full Zvbb support.
 - This is an incremental RVV subset, not a claim of full RVV 1.0 compliance.
 
 ## Working rules

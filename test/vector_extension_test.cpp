@@ -883,3 +883,198 @@ TEST(VectorExtension, ComparisonsProducePackedMaskBitsForEverySupportedSew)
 }
 
 
+
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesSelectedBitManipulationInstructions)
+{
+    const auto program = assembleVectorSource(
+        "vandn.vv v1, v2, v3\n"
+        "vrol.vv v4, v5, v6\n"
+        "vror.vv v7, v8, v9\n"
+        "vclz.v v10, v11\n"
+        "vctz.v v12, v13, v0.t\n"
+        "vcpop.v v14, v15\n");
+    ASSERT_EQ(program.text_buffer.size(), 6u);
+
+    const auto opivv = [](uint32_t funct6, uint32_t vd, uint32_t vs2, uint32_t vs1,
+                          uint32_t vm = 1u)
+    {
+        return (funct6 << 26) | (vm << 25) | (vs2 << 20) | (vs1 << 15) |
+               (vd << 7) | 0x57u;
+    };
+    const auto opmvv_unary = [](uint32_t unary_vs1, uint32_t vd, uint32_t vs2,
+                                uint32_t vm = 1u)
+    {
+        return (0b010010u << 26) | (vm << 25) | (vs2 << 20) |
+               (unary_vs1 << 15) | (0b010u << 12) | (vd << 7) | 0x57u;
+    };
+
+    EXPECT_EQ(program.text_buffer[0], opivv(0b000001, 1, 2, 3));
+    EXPECT_EQ(program.text_buffer[1], opivv(0b010101, 4, 5, 6));
+    EXPECT_EQ(program.text_buffer[2], opivv(0b010100, 7, 8, 9));
+    EXPECT_EQ(program.text_buffer[3], opmvv_unary(0b01100, 10, 11));
+    EXPECT_EQ(program.text_buffer[4], opmvv_unary(0b01101, 12, 13, 0));
+    EXPECT_EQ(program.text_buffer[5], opmvv_unary(0b01110, 14, 15));
+
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vandn.vv v1, v2, v3");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]),
+              "vrol.vv v4, v5, v6");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[2]),
+              "vror.vv v7, v8, v9");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[3]),
+              "vclz.v v10, v11");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[4]),
+              "vctz.v v12, v13, v0.t");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[5]),
+              "vcpop.v v14, v15");
+}
+
+TEST(VectorExtension, PerElementBitCountsWorkForEverySupportedSew)
+{
+    const struct Case { int zimm; size_t sew; size_t bytes; size_t lanes; } cases[] = {
+        {0, 8, 1, 16}, {8, 16, 2, 8}, {16, 32, 4, 4}, {24, 64, 8, 2},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        const uint64_t element_mask = test_case.sew == 64
+                                          ? UINT64_MAX
+                                          : ((uint64_t{1} << test_case.sew) - 1u);
+        writeElement(vm.registers_, 2, 0, test_case.bytes, 0);
+        writeElement(vm.registers_, 2, 1, test_case.bytes,
+                     uint64_t{1} << (test_case.sew - 1));
+        if (test_case.lanes > 2)
+            writeElement(vm.registers_, 2, 2, test_case.bytes, 1);
+        if (test_case.lanes > 3)
+            writeElement(vm.registers_, 2, 3, test_case.bytes, element_mask);
+        for (size_t byte = 0; byte < 16; ++byte)
+        {
+            vm.registers_.WriteVectorByte(3, byte, 0xAAu);
+            vm.registers_.WriteVectorByte(4, byte, 0xAAu);
+            vm.registers_.WriteVectorByte(5, byte, 0xAAu);
+        }
+
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x0, " + std::to_string(test_case.zimm) + "\n"
+            "vclz.v v3, v2\n"
+            "vctz.v v4, v2\n"
+            "vcpop.v v5, v2\n"));
+        for (int step = 0; step < 4; ++step)
+            vm.Step();
+
+        EXPECT_EQ(readElement(vm.registers_, 3, 0, test_case.bytes), test_case.sew);
+        EXPECT_EQ(readElement(vm.registers_, 4, 0, test_case.bytes), test_case.sew);
+        EXPECT_EQ(readElement(vm.registers_, 5, 0, test_case.bytes), 0u);
+        EXPECT_EQ(readElement(vm.registers_, 3, 1, test_case.bytes), 0u);
+        EXPECT_EQ(readElement(vm.registers_, 4, 1, test_case.bytes), test_case.sew - 1u);
+        EXPECT_EQ(readElement(vm.registers_, 5, 1, test_case.bytes), 1u);
+        if (test_case.lanes > 2)
+        {
+            EXPECT_EQ(readElement(vm.registers_, 3, 2, test_case.bytes), test_case.sew - 1u);
+            EXPECT_EQ(readElement(vm.registers_, 4, 2, test_case.bytes), 0u);
+            EXPECT_EQ(readElement(vm.registers_, 5, 2, test_case.bytes), 1u);
+        }
+        if (test_case.lanes > 3)
+        {
+            EXPECT_EQ(readElement(vm.registers_, 3, 3, test_case.bytes), 0u);
+            EXPECT_EQ(readElement(vm.registers_, 4, 3, test_case.bytes), 0u);
+            EXPECT_EQ(readElement(vm.registers_, 5, 3, test_case.bytes), test_case.sew);
+        }
+    }
+}
+
+TEST(VectorExtension, AndNotAndRotatesWorkForEverySupportedSew)
+{
+    const struct Case { int zimm; size_t sew; size_t bytes; } cases[] = {
+        {0, 8, 1}, {8, 16, 2}, {16, 32, 4}, {24, 64, 8},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 2);
+        const uint64_t element_mask = test_case.sew == 64
+                                          ? UINT64_MAX
+                                          : ((uint64_t{1} << test_case.sew) - 1u);
+        const uint64_t data0 = 0xA55AA55AA55AA55AULL & element_mask;
+        const uint64_t data1 = 0x123456789ABCDEF0ULL & element_mask;
+        const uint64_t operand0 = 0x0FF00FF00FF00FF0ULL & element_mask;
+        const uint64_t operand1 = 0xFEDCBA9876543210ULL & element_mask;
+        writeElement(vm.registers_, 2, 0, test_case.bytes, data0);
+        writeElement(vm.registers_, 2, 1, test_case.bytes, data1);
+        writeElement(vm.registers_, 3, 0, test_case.bytes, operand0);
+        writeElement(vm.registers_, 3, 1, test_case.bytes, operand1);
+        writeElement(vm.registers_, 4, 0, test_case.bytes, 1);
+        writeElement(vm.registers_, 4, 1, test_case.bytes, test_case.sew + 1u);
+
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n"
+            "vandn.vv v5, v2, v3\n"
+            "vrol.vv v6, v2, v4\n"
+            "vror.vv v7, v2, v4\n"));
+        for (int step = 0; step < 4; ++step)
+            vm.Step();
+
+        const auto rotate_left = [test_case](uint64_t value, size_t shift)
+        {
+            const uint64_t mask = test_case.sew == 64
+                                      ? UINT64_MAX
+                                      : ((uint64_t{1} << test_case.sew) - 1u);
+            shift &= test_case.sew - 1u;
+            return shift == 0
+                       ? value & mask
+                       : ((value << shift) | (value >> (test_case.sew - shift))) & mask;
+        };
+        const auto rotate_right = [test_case](uint64_t value, size_t shift)
+        {
+            const uint64_t mask = test_case.sew == 64
+                                      ? UINT64_MAX
+                                      : ((uint64_t{1} << test_case.sew) - 1u);
+            shift &= test_case.sew - 1u;
+            return shift == 0
+                       ? value & mask
+                       : ((value >> shift) | (value << (test_case.sew - shift))) & mask;
+        };
+
+        EXPECT_EQ(readElement(vm.registers_, 5, 0, test_case.bytes),
+                  data0 & (~operand0) & element_mask);
+        EXPECT_EQ(readElement(vm.registers_, 5, 1, test_case.bytes),
+                  data1 & (~operand1) & element_mask);
+        EXPECT_EQ(readElement(vm.registers_, 6, 0, test_case.bytes), rotate_left(data0, 1));
+        EXPECT_EQ(readElement(vm.registers_, 6, 1, test_case.bytes),
+                  rotate_left(data1, test_case.sew + 1u));
+        EXPECT_EQ(readElement(vm.registers_, 7, 0, test_case.bytes), rotate_right(data0, 1));
+        EXPECT_EQ(readElement(vm.registers_, 7, 1, test_case.bytes),
+                  rotate_right(data1, test_case.sew + 1u));
+    }
+}
+
+TEST(VectorExtension, MaskedBitCountsPreserveInactiveAndTailElements)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 3);
+    vm.registers_.WriteVectorByte(0, 0, 0x05u);
+    writeElement(vm.registers_, 2, 0, 1, 0);
+    writeElement(vm.registers_, 2, 1, 1, 0x80);
+    writeElement(vm.registers_, 2, 2, 1, 0xFF);
+    for (size_t byte = 0; byte < 16; ++byte)
+        vm.registers_.WriteVectorByte(3, byte, 0xAAu);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vclz.v v3, v2, v0.t\n"
+        "nop\n"));
+    vm.Step();
+    vm.Step();
+    vm.Step();
+
+    EXPECT_EQ(readElement(vm.registers_, 3, 0, 1), 8u);
+    EXPECT_EQ(readElement(vm.registers_, 3, 1, 1), 0xAAu);
+    EXPECT_EQ(readElement(vm.registers_, 3, 2, 1), 0u);
+    for (size_t byte = 3; byte < 16; ++byte)
+        EXPECT_EQ(vm.registers_.ReadVectorByte(3, byte), 0xAAu);
+}

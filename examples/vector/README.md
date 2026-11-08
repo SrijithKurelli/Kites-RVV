@@ -8,6 +8,7 @@ root after building `kites-cli`:
 ./build/kites-cli examples/vector/vector_compare_count.s --vm rvss
 ./build/kites-cli examples/vector/vector_masked_add_store.s --vm rvss
 ./build/kites-cli examples/vector/vector_average_selected.s --vm rvss
+./build/kites-cli examples/vector/vector_bitmanip.s --vm rvss
 ```
 
 Expected results:
@@ -18,8 +19,9 @@ Expected results:
 | `vector_compare_count.s` | `v0` has predicate bits 0 and 2 set; `x10 = 2`. |
 | `vector_masked_add_store.s` | Predicate bits 0, 2, and 3 are set; active result lanes are 7, 3, and 17. Inactive result lane 1 remains -1 in memory. |
 | `vector_average_selected.s` | The selected values are 1 and 4; sum=5, count=2, integer average=2. The program prints `2`. |
+| `vector_bitmanip.s` | On 8-bit lanes: AND-NOT [128, 64, 0, 251], rotate-left [3, 9, 0, 255], rotate-right [192, 144, 0, 255], leading/trailing zeros [0, 1, 8, 0], and population counts [2, 2, 0, 8]. |
 
 The average example uses a signed scalar `div`, which truncates toward zero.
-When no elements match, its branch sets the result to zero. All examples use
-SEW=32 and VL=4. They exercise the supported subset, not general RVV 1.0
-programs.
+When no elements match, its branch sets the result to zero. The initial four
+examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4.
+These programs exercise the implemented subset, not general RVV 1.0 programs.

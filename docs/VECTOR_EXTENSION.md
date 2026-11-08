@@ -92,6 +92,35 @@ of vector register `vs2` and writes the count to scalar integer register `rd`.
 An optional trailing `, v0.t` counts only elements enabled by `v0`. This lets an
 assembly sequence count elements selected by a preceding comparison.
 
+### Selected vector bit-manipulation operations
+
+This increment adds a selected subset of Zvbb-style vector operations. Only
+the vector-vector or per-element vector forms are supported; vector-scalar and
+vector-immediate variants are not included.
+
+Per-element bit counts (each accepts an optional trailing `, v0.t`):
+
+- `vclz.v vd, vs2` — count leading zero bits in each SEW-sized element.
+- `vctz.v vd, vs2` — count trailing zero bits in each element.
+- `vcpop.v vd, vs2` — count set bits in each element.
+
+For `vclz.v` and `vctz.v`, a zero-valued input element produces `SEW`.
+Population count is performed independently for each active element.
+
+Vector-vector bitwise and rotate operations (each accepts an optional
+trailing `, v0.t`):
+
+- `vandn.vv vd, vs2, vs1` — bitwise AND of `vs2` with the element-wise
+  complement of `vs1`.
+- `vrol.vv vd, vs2, vs1` — rotate each `vs2` element left by the
+  corresponding `vs1` element's rotate amount.
+- `vror.vv vd, vs2, vs1` — rotate each `vs2` element right by the
+  corresponding `vs1` element's rotate amount.
+
+Rotate amounts use only their low `log2(SEW)` bits. Masked-off and tail
+destination elements remain undisturbed. This is a selected bit-manipulation
+subset, not a complete Zvbb implementation.
+
 ### Unit-stride vector memory instructions
 
 The assembler and RVSS processor support these unit-stride forms. Each accepts an optional trailing `, v0.t` operand:
@@ -117,6 +146,7 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_compare_count.s` — compare corresponding elements and count matches.
 - `vector_masked_add_store.s` — compare, masked arithmetic, and masked store.
 - `vector_average_selected.s` — masked sum, population count, zero-count guard, and integer average.
+- `vector_bitmanip.s` — selected vector AND-NOT, rotate, leading/trailing-zero, and population-count operations.
 
 See `examples/vector/README.md` for commands and expected results.
 
@@ -125,9 +155,10 @@ See `examples/vector/README.md` for commands and expected results.
 - Vector instructions are implemented only in the RVSS single-cycle processor.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Arithmetic, logical, comparison, reduction, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
+- Arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride vector loads/stores require `EEW=SEW`; differing element widths,
   strided/indexed/segment operations, and nonzero `nf` are not implemented.
+- Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
 - Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Strided memory, pipeline support, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
@@ -189,7 +220,7 @@ in `v4[0]` must be initialized before execution.
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, arithmetic and logical operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
+instruction encoding, arithmetic, logical and selected bit-manipulation operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction/bit-count operations, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, and unsupported vector memory forms.
 The full CMake test suite requires Qt 6.9.2 and GoogleTest. CI run #67 passed all 334 enabled CTest tests with zero failures; it also smoke-tested all four runnable examples and checked CLI vector configuration/register inspection. Three separately disabled CTest entries remain disabled. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.

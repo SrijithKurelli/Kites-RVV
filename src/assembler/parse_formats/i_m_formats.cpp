@@ -593,6 +593,40 @@ bool Parser::parse_O_VEC_C_VEC_C_VEC()
     return true;
 }
 
+bool Parser::parse_O_VEC_C_VEC()
+{
+    const unsigned int line = currentToken().line_number;
+    if (peekToken(1).line_number != line || peekToken(1).type != TokenType::VEC_REGISTER ||
+        peekToken(2).line_number != line || peekToken(2).type != TokenType::COMMA ||
+        peekToken(3).line_number != line || peekToken(3).type != TokenType::VEC_REGISTER)
+        return false;
+
+    bool masked = false;
+    if (peekToken(4).type != TokenType::EOF_ && peekToken(4).line_number == line)
+    {
+        if (peekToken(4).type != TokenType::COMMA ||
+            peekToken(5).type != TokenType::LABEL_REF || peekToken(5).line_number != line ||
+            peekToken(5).value != "v0.t" ||
+            (peekToken(6).type != TokenType::EOF_ && peekToken(6).line_number == line))
+            return false;
+        masked = true;
+    }
+
+    ICUnit block;
+    block.setOpcode(currentToken().value);
+    block.setLineNumber(line);
+    block.setInstructionIndex(instruction_index_);
+    block.setRd(peekToken(1).value);
+    block.setRs1(peekToken(3).value); // Assembly's vs2 operand.
+    if (masked)
+        block.setImm("0"); // vm=0 encodes the explicit v0.t predicate.
+    skipCurrentLine();
+    intermediate_code_.emplace_back(block, true);
+    instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+    ++instruction_index_;
+    return true;
+}
+
 bool Parser::parse_O_VEC_C_LP_GPR_RP()
 {
     const unsigned int line = currentToken().line_number;

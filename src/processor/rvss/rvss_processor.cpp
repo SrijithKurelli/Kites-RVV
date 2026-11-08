@@ -572,6 +572,59 @@ void RVSSProcessor::ExecuteVector()
         return a < b;
     };
 
+    // Selected OPMVV unary bit-count operations. Zero inputs produce SEW for vclz/vctz.
+    if (funct3 == 0b010 && funct6 == 0b010010)
+    {
+        if (vs1 != 0b01100 && vs1 != 0b01101 && vs1 != 0b01110)
+            throw std::runtime_error("Unsupported vector unary bit-manipulation instruction");
+
+        const auto source = registers_.ReadVector(vs2);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+
+            const uint64_t value = readElement(source, lane);
+            uint64_t count = 0;
+            if (vs1 == 0b01100) // vclz.v
+            {
+                for (size_t bit = vector_sew_; bit > 0; --bit)
+                {
+                    if (((value >> (bit - 1)) & 1u) != 0)
+                        break;
+                    ++count;
+                }
+            }
+            else if (vs1 == 0b01101) // vctz.v
+            {
+                for (size_t bit = 0; bit < vector_sew_; ++bit)
+                {
+                    if (((value >> bit) & 1u) != 0)
+                        break;
+                    ++count;
+                }
+            }
+            else // vcpop.v
+            {
+                for (size_t bit = 0; bit < vector_sew_; ++bit)
+                    count += (value >> bit) & 1u;
+            }
+            writeElement(result, lane, count);
+        }
+
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
     // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order.
     if (funct3 == 0b010)
     {
@@ -620,8 +673,9 @@ void RVSSProcessor::ExecuteVector()
         throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
 
     const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
-    const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000010 ||
-        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011;
+    const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000001 ||
+        funct6 == 0b000010 || funct6 == 0b001001 || funct6 == 0b001010 ||
+        funct6 == 0b001011 || funct6 == 0b010100 || funct6 == 0b010101;
     if (!comparison && !arithmetic_or_logic)
         throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
 
@@ -658,10 +712,23 @@ void RVSSProcessor::ExecuteVector()
             switch (funct6)
             {
             case 0b000000: value = (a + b) & element_mask; break;
+            case 0b000001: value = a & (~b) & element_mask; break; // vandn.vv
             case 0b000010: value = (a - b) & element_mask; break;
             case 0b001001: value = a & b; break;
             case 0b001010: value = a | b; break;
             case 0b001011: value = a ^ b; break;
+            case 0b010100: // vror.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = shift == 0 ? a : ((a >> shift) | (a << (vector_sew_ - shift))) & element_mask;
+                break;
+            }
+            case 0b010101: // vrol.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = shift == 0 ? a : ((a << shift) | (a >> (vector_sew_ - shift))) & element_mask;
+                break;
+            }
             default: break;
             }
             writeElement(result, lane, value);
