@@ -47,6 +47,24 @@ uint64_t readElement(const Kites::RegisterFile &registers, size_t reg,
 }
 }
 
+TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    EXPECT_TRUE(manager.hasVectorState());
+    EXPECT_EQ(manager.getVectorSew(), 8u);
+    EXPECT_EQ(manager.getVectorVl(), 0u);
+
+    manager.loadProgram(assembleVectorSource(
+        "addi x5, x0, 4\n"
+        "vsetvli x6, x5, 16\n"));
+    manager.step();
+    manager.step();
+
+    EXPECT_EQ(manager.getVectorSew(), 32u);
+    EXPECT_EQ(manager.getVectorVl(), 4u);
+}
+
 TEST(VectorExtension, RegisterFileStoresAndResets128Bits)
 {
     Kites::RegisterFile registers;
