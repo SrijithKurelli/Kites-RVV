@@ -990,7 +990,12 @@ void RVSSProcessor::WriteMemory()
                     continue;
 
                 const size_t offset = lane * element_bytes;
-                PendingVectorStore pending{base_address + offset, 0, {}};
+                const uint64_t address = base_address + offset;
+                if (address < base_address ||
+                    address >= vm_config::config.getMemorySize() - (element_bytes - 1))
+                    throw std::out_of_range("Vector store element address out of range");
+
+                PendingVectorStore pending{address, 0, {}};
                 pending.old_bytes.reserve(element_bytes);
                 for (size_t byte = 0; byte < element_bytes; ++byte)
                 {
