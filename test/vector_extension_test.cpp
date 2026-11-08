@@ -488,16 +488,18 @@ TEST(VectorExtension, StridedStorePreflightsEveryActiveLaneAddress)
     Kites::setupVmStateDirectory();
     Kites::RVSSProcessor vm;
     vm.registers_.WriteGpr(5, 2);
-    vm.registers_.WriteGpr(7, 4);
-    vm.registers_.WriteGpr(8, static_cast<uint64_t>(-8));
+    constexpr uint64_t valid_address = 0x1000;
+    vm.registers_.WriteGpr(7, valid_address);
+    vm.registers_.WriteGpr(8, static_cast<uint64_t>(-0x2000));
     vm.registers_.WriteVectorByte(1, 0, 0x5Au);
     vm.registers_.WriteVectorByte(1, 1, 0xA5u);
+    vm.memory_controller_.writeByte(valid_address, 0xD7u);
     vm.LoadProgram(assembleVectorSource(
         "vsetvli x6, x5, 0\n"
         "vsse8.v v1, (x7), x8\n"));
     vm.Step();
     EXPECT_THROW(vm.Step(), std::out_of_range);
-    EXPECT_EQ(vm.memory_controller_.readByte(4), 0u);
+    EXPECT_EQ(vm.memory_controller_.readByte(valid_address), 0xD7u);
 }
 
 TEST(VectorExtension, VectorMemoryRejectsMismatchedEew)
