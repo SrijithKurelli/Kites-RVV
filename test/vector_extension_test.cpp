@@ -617,6 +617,29 @@ TEST(VectorExtension, MaskedStoreDoesNotAccessInactiveOutOfRangeLane)
     EXPECT_EQ(vm.memory_controller_.readByte(last_valid_address), 0x5Au);
 }
 
+TEST(VectorExtension, MaskedStorePreflightsAllActiveElementBounds)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    const uint64_t memory_size = Kites::vm_config::config.getMemorySize();
+    const uint64_t base_address = memory_size - 8;
+    vm.registers_.WriteGpr(5, 2);
+    vm.registers_.WriteGpr(8, base_address);
+    vm.registers_.WriteVectorByte(0, 0, 0x03u); // Both 64-bit lanes are active.
+    for (size_t byte = 0; byte < 16; ++byte)
+        vm.registers_.WriteVectorByte(1, byte, static_cast<uint8_t>(byte + 1));
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 24\n"
+        "vse64.v v1, (x8), v0.t\n"));
+    vm.Step();
+    EXPECT_THROW(vm.Step(), std::out_of_range);
+
+    // Lane 0 is in range, but lane 1 is not. Preflight must prevent a partial store.
+    for (size_t byte = 0; byte < 8; ++byte)
+        EXPECT_EQ(vm.memory_controller_.readByte(base_address + byte), 0u);
+}
+
 TEST(VectorExtension, UnsupportedVtypeIsRejectedByAssembler)
 {
     EXPECT_THROW(assembleVectorSource("vsetvli x5, x6, 32\n"), std::runtime_error);
