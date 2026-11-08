@@ -173,10 +173,10 @@ See `examples/vector/README.md` for commands and expected results.
 - Vector instructions are implemented only in the RVSS single-cycle processor.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride memory operations support unmasked and `v0.t` masked forms in RVSS.
+- Arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride/strided memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride and selected strided vector loads/stores require `EEW=SEW`; differing element widths, indexed/segment operations, and nonzero `nf` are not implemented.
 - Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
-- Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Strided memory, pipeline support, and several RVV operations remain unimplemented.
+- Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Indexed/segment memory, pipeline support, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 
@@ -241,5 +241,11 @@ instruction encoding, arithmetic, logical and selected bit-manipulation operatio
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, unsupported vector memory forms, and
 strided memory assembly/execution across SEWs, zero stride, negative stride
-with masking, and active-address store preflight. The strided-memory tests have been added
-but await the next CI run. The full CMake test suite requires Qt 6.9.2 and GoogleTest. CI run #70 reports 100% tests passed with zero failures out of 338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped. It also smoke-tested all five runnable examples present at that commit, including `vector_bitmanip.s`, and checked CLI vector configuration/register inspection. Masked tests cover `v0.t` lane skipping, inactive/tail preservation, and memory undo/redo.
+with masking, and active-address store preflight. All five new strided-memory
+tests passed in CI run #73. The full CMake test suite requires Qt 6.9.2 and
+GoogleTest. CI run #73 reports 100% tests passed with zero failures out of 343
+CTest tests in 19.77 seconds; four tests were disabled and one was skipped. It
+also smoke-tested all six runnable examples, including `vector_bitmanip.s` and
+`vector_strided_memory.s`, and checked CLI vector configuration/register
+inspection. Masked tests cover `v0.t` lane skipping, inactive/tail preservation,
+and memory undo/redo. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).

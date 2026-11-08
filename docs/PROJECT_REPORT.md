@@ -117,17 +117,15 @@ positive `5 / 2 = 2`, negative `-5 / 2 = -2`, truncation toward zero, and an
 explicit zero-count branch. The selected bit-manipulation tests cover assembler
 encoding/disassembly, per-element bit counts and AND-NOT/rotates for every
 supported SEW, plus masked bit-count preservation of inactive and tail elements.
-Strided-memory assembler/execution tests cover all SEWs, zero stride, negative
-stride with masking, and active-lane store preflight; these new tests await CI
-verification.
-CI run #70 (commit `8b70cf9`) reports 100% tests passed with 0 failures out of
-338 CTest tests in 20.10 seconds; four tests were disabled and one was skipped.
-The workflow also built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
-executed all five then-existing runnable assembly examples on RVSS (including
-the bit-manipulation example), asserted that the average example prints `2`,
-and exercised the REPL
-`info` and `regs` commands by checking the reported vector configuration and
-vector-register section. See [CI run #70](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42465927514).
+Strided-memory tests cover encoding/disassembly, all SEWs, zero stride, negative
+stride with masking, and active-lane store preflight; all five passed in CI run #73.
+CI run #73 (commit `aa963b9`) reports 100% tests passed with 0 failures out of
+343 CTest tests in 19.77 seconds; four tests were disabled and one was skipped.
+The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
+executed all six runnable assembly examples on RVSS (including bit-manipulation
+and strided-memory examples), asserted that the average example prints `2`, and
+exercised the REPL `info` and `regs` commands by checking vector configuration
+and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).
 
 ## 6. Known limitations
 
@@ -158,7 +156,6 @@ The project scope identifies bit-manipulation operations, strided memory,
 cycle-stepped execution/performance modeling, pipeline integration, and
 independent reference comparisons as stretch work. The selected bit-count,
 AND-NOT, and rotate subset has been implemented and CI-verified. The selected
-strided-memory subset has been implemented, but its new CI verification is
-pending. Remaining bit-manipulation operations, indexed/segment memory, the
-cycle-stepped model, pipeline integration, and independent reference
-comparison remain deferred. The limitations above make those boundaries explicit.
+strided-memory subset has been implemented and CI-verified in run #73. Remaining
+bit-manipulation operations, indexed/segment memory, the cycle-stepped model,
+pipeline integration, and independent reference comparison remain deferred. The limitations above make those boundaries explicit.
