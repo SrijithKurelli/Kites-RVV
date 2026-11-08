@@ -93,15 +93,15 @@ The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
 This count comparison is a simple architectural metric; it does not claim a
-wall-clock speedup or a cycle-accurate timing model. The average test checks
-the positive `5 / 2 = 2` case and the explicit zero-count branch. A negative
-signed-division regression (`-5 / 2 = -2`) has now been added to distinguish
-truncation toward zero from floor division; this new assertion is pending the
-next CI run. CI run #64 (commit `f3041d5`) passed all 334 CTest tests (0 failures)
-and smoke-tested all four runnable assembly examples on RVSS. The latest branch
-commit also strengthens the CI workflow to assert the average program's printed
-result and exercise the REPL `info` and `regs` commands; these new checks await
-CI run #67. The workflow builds the CLI and suite under Linux with Qt 6.9.2 and GCC.
+wall-clock speedup or a cycle-accurate timing model. The average tests cover
+positive `5 / 2 = 2`, negative `-5 / 2 = -2`, truncation toward zero, and an
+explicit zero-count branch. CI run #67 (commit `39a079a`) passed all 334 enabled
+CTest tests with 0 failures in 39.30 seconds; three separately disabled CTest
+entries remained disabled. The workflow also executed all four runnable assembly
+examples on RVSS, asserted that the average example prints `2`, and exercised
+the REPL `info` and `regs` commands by checking the reported vector configuration
+and vector-register section. The workflow builds the CLI and suite under Linux
+with Qt 6.9.2 and GCC. See [CI run #67](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42458958352).
 
 ## 6. Known limitations
 

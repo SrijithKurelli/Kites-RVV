@@ -2,14 +2,14 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-08 (CI run #64 baseline; latest assertions pending run #67)
+Last updated: 2026-11-08 (after successful CI run #67)
 
 ## Must-have core scope
 
 | Scope item | Status | Evidence / remaining work |
 |---|---|---|
-| 32 vector registers, VLEN=128 | Implemented; CI coverage present | Register file and Vector GUI section; verify in current CI run. |
-| SEW 8/16/32/64, LMUL=1 | Implemented; CI coverage present | `vsetvli` subset; `vtype` is restricted to four supported encodings. |
+| 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #67. |
+| SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
 | Vector configuration / AVL rules | Implemented for selected `vsetvli` forms | Includes `rs1=x0` and `rd=x0` special handling and regression tests. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
@@ -26,10 +26,10 @@ Last updated: 2026-11-08 (CI run #64 baseline; latest assertions pending run #67
 | Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #64; 334 CTest tests passed. The negative signed-average regression and strengthened CLI output assertions are included in the latest branch commit and await CI run #67. |
-| Scalar regression | Verified | CI run #64 passed the full CTest suite: 334 passed, 0 failed (20.72 seconds), including existing scalar regressions. The newly added negative-average test awaits run #67. |
-| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | Verified by CI run #64: a four-element sum test checks equal results and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
-| Short design/validation/limitations report | Drafted; validation evidence refreshed | `docs/PROJECT_REPORT.md` summarizes architecture, supported instructions, validation approach, and known/deferred limitations; it records CI run #64 as the latest completed green baseline; newer regression/CLI assertions await run #66. Final editorial review remains. |
+| Assembly examples and automated tests | Implemented and CI-verified for current subset | All four runnable examples completed in CI run #67; the average example's output `2` was asserted. The negative signed-average regression, zero-count branch, and CLI `info`/`regs` checks passed. |
+| Scalar regression | Verified | CI run #67 passed all 334 enabled CTest tests, with 0 failures (39.30 seconds); 3 separately disabled CTest entries remained disabled. This includes existing scalar regressions. |
+| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | CI run #67 verifies a four-element sum with equal result and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
+| Short design/validation/limitations report | Completed for the initial core milestone | `docs/PROJECT_REPORT.md` summarizes architecture, implemented subset, validation evidence from CI run #67, and all known/deferred limitations. Final team review before submission remains advisable. |
 
 ## Stretch scope
 
