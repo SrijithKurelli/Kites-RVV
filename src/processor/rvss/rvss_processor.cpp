@@ -549,7 +549,8 @@ void RVSSProcessor::ExecuteVector()
         }
         return;
     }
-
+// mask handling code here
+    
     const uint8_t funct6 = (current_instruction_ >> 26) & 0x3F;
     const bool vm = ((current_instruction_ >> 25) & 1u) != 0;
     const uint8_t vs2 = (current_instruction_ >> 20) & 0x1F;
@@ -561,6 +562,8 @@ void RVSSProcessor::ExecuteVector()
     };
 
     // vcpop.m is an OPMVX unary operation with a fixed vs1 field of 10000.
+
+    
     if (funct3 == 0b110 && funct6 == 0b010000 && vs1 == 0b10000)
     {
         const auto source_mask = registers_.ReadVector(vs2);
@@ -608,7 +611,9 @@ void RVSSProcessor::ExecuteVector()
         return a < b;
     };
 
-    // Selected OPMVV unary bit-count operations. Zero inputs produce SEW for vclz/vctz.
+    // Selected OPMVV unary bit-count operations. Zero inputs produce SEW for vclz/vctz/vcpop.v
+
+    
     if (funct3 == 0b010 && funct6 == 0b010010)
     {
         if (vs1 != 0b01100 && vs1 != 0b01101 && vs1 != 0b01110)
@@ -661,7 +666,9 @@ void RVSSProcessor::ExecuteVector()
         return;
     }
 
-    // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order.
+    // OPMVV reductions use vs1[0] as seed and fold active vs2 elements in lane order. Reduction instructions
+
+    
     if (funct3 == 0b010)
     {
         if (vector_vl_ == 0)
@@ -684,6 +691,7 @@ void RVSSProcessor::ExecuteVector()
             const uint64_t value = readElement(source, lane);
             switch (funct6)
             {
+            
             case 0b000000: accumulator = (accumulator + value) & element_mask; break; // vredsum
             case 0b000001: accumulator &= value; break; // vredand
             case 0b000010: accumulator |= value; break; // vredor
@@ -704,7 +712,8 @@ void RVSSProcessor::ExecuteVector()
         }
         return;
     }
-
+  // Comparison Instructions
+    
     if (funct3 != 0b000)
         throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
 
@@ -736,6 +745,9 @@ void RVSSProcessor::ExecuteVector()
             case 0b011011: predicate = signedLess(a, b); break; // vmslt
             default: break;
             }
+
+            // Arithmetic and logical instructions
+            
             const uint8_t bit = static_cast<uint8_t>(1u << (lane % 8));
             if (predicate)
                 result[lane / 8] |= bit;
@@ -1002,6 +1014,7 @@ void RVSSProcessor::HandleSyscall()
     }
     }
 }
+/// load and storee
 
 void RVSSProcessor::WriteMemory()
 {
