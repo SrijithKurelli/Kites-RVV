@@ -865,12 +865,13 @@ bool Parser::parse_O_GPR_C_GPR_C_VTYPEI()
     }
 
     const int64_t vtypei = std::stoll(peekToken(5).value);
-    // RVV vtype immediate: vsew[5:3], vlmul[2:0]. This subset supports
-    // LMUL=1 and SEW 8/16/32/64 only: zimm values 0, 8, 16, and 24.
-    if (vtypei != 0 && vtypei != 8 && vtypei != 16 && vtypei != 24)
+    // This implementation fixes LMUL=1 and supports SEW=8/16/32/64.
+    // vta/vma policy bits (bits 6/7) are accepted; reserved upper bits are not.
+    if (vtypei < 0 || vtypei > 255 || (vtypei & 0x7) != 0 ||
+        ((vtypei >> 3) & 0x7) > 3)
     {
         recordError(ParseError(peekToken(5).line_number,
-                               "Unsupported vtypei: use 0, 8, 16, or 24 (LMUL=1, SEW=8/16/32/64)"));
+                               "Unsupported vtypei: require LMUL=1 and SEW=8/16/32/64"));
         skipCurrentLine();
         return true;
     }
