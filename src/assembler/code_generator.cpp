@@ -25,7 +25,7 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
 
         if (instruction_set::isValidVectorInstruction(block.getOpcode()))
         {
-            if (block.getOpcode() == "vsetvli")
+            if (block.getOpcode() == "vsetvli" || block.getOpcode() == "vsetivli")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
             else if (block.getOpcode() == "vmv.x.s")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
