@@ -1280,8 +1280,8 @@ TEST(VectorExtension, MaskedBitCountsPreserveInactiveAndTailElements)
 TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
 {
     const auto program = assembleVectorSource(
-        "vmul.vv v7, v8, v9\\n"
-        "vmul.vv v10, v11, v12, v0.t\\n");
+        "vmul.vv v7, v8, v9\n"
+        "vmul.vv v10, v11, v12, v0.t\n");
     ASSERT_EQ(program.text_buffer.size(), 2u);
 
     const auto opmvv = [](uint32_t vd, uint32_t vs2, uint32_t vs1, uint32_t vm)
@@ -1337,8 +1337,8 @@ TEST(VectorExtension, VectorMultiplyWrapsAtEverySupportedSew)
             vm.registers_.WriteVectorByte(4, byte, 0xA5u);
 
         vm.LoadProgram(assembleVectorSource(
-            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n"
-            "vmul.vv v4, v2, v3\\n"));
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\n"
+            "vmul.vv v4, v2, v3\n"));
         vm.Step();
         vm.Step();
 
@@ -1379,8 +1379,8 @@ TEST(VectorExtension, MaskedVectorMultiplyPreservesInactiveAndTailElements)
         vm.registers_.WriteVectorByte(4, byte, 0xA5u);
 
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 16\\n"
-        "vmul.vv v4, v2, v3, v0.t\\n"));
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v4, v2, v3, v0.t\n"));
     vm.Step();
     vm.Step();
 
@@ -1407,9 +1407,9 @@ TEST(VectorExtension, DotProductUsesVectorMultiplyAndReduction)
     }
 
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 16\\n"
-        "vmul.vv v3, v1, v2\\n"
-        "vredsum.vs v4, v3, v0\\n"));
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v3, v1, v2\n"
+        "vredsum.vs v4, v3, v0\n"));
     vm.Step();
     vm.Step();
     vm.Step();
