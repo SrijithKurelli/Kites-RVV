@@ -630,6 +630,52 @@ bool Parser::parse_O_VEC_C_VEC_C_GPR()
     return true;
 }
 
+bool Parser::parse_O_VEC_C_VEC_C_I()
+{
+    const unsigned int line = currentToken().line_number;
+    if (peekToken(1).line_number != line || peekToken(1).type != TokenType::VEC_REGISTER ||
+        peekToken(2).line_number != line || peekToken(2).type != TokenType::COMMA ||
+        peekToken(3).line_number != line || peekToken(3).type != TokenType::VEC_REGISTER ||
+        peekToken(4).line_number != line || peekToken(4).type != TokenType::COMMA ||
+        peekToken(5).line_number != line || peekToken(5).type != TokenType::NUM)
+        return false;
+
+    const int64_t immediate = std::stoll(peekToken(5).value);
+    if (immediate < -16 || immediate > 15)
+    {
+        recordError(ParseError(peekToken(5).line_number,
+                               "Vector immediate must be in the range -16 through 15"));
+        skipCurrentLine();
+        return true;
+    }
+
+    bool masked = false;
+    if (peekToken(6).type != TokenType::EOF_ && peekToken(6).line_number == line)
+    {
+        if (peekToken(6).type != TokenType::COMMA ||
+            peekToken(7).type != TokenType::LABEL_REF || peekToken(7).line_number != line ||
+            peekToken(7).value != "v0.t" ||
+            (peekToken(8).type != TokenType::EOF_ && peekToken(8).line_number == line))
+            return false;
+        masked = true;
+    }
+
+    ICUnit block;
+    block.setOpcode(currentToken().value);
+    block.setLineNumber(line);
+    block.setInstructionIndex(instruction_index_);
+    block.setRd(peekToken(1).value);
+    block.setRs1(peekToken(3).value); // Vector source operand (vs2).
+    block.setRs2(std::to_string(immediate)); // Signed five-bit immediate.
+    if (masked)
+        block.setImm("0");
+    skipCurrentLine();
+    intermediate_code_.emplace_back(block, true);
+    instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+    ++instruction_index_;
+    return true;
+}
+
 bool Parser::parse_O_VEC_C_VEC()
 {
     const unsigned int line = currentToken().line_number;
