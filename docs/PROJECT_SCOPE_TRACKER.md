@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-08 (after successful CI run #73)
+Last updated: 2026-11-15 (after successful CI run #119; vmul.vx validation pending)
 
 ## Must-have core scope
 
@@ -27,7 +27,7 @@ Last updated: 2026-11-08 (after successful CI run #73)
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Implemented and CI-verified for current selected subset | CI #73 ran all six vector examples, including `vector_strided_memory.s`, and passed the CLI `info`/`regs` smoke check. Average output `2` remains asserted. Five strided-memory regression tests passed. |
-| Scalar regression | Verified | CI run #73 reports 100% tests passed with 0 failures out of 343 CTest tests (19.77 seconds). Four tests were disabled and one test was skipped. This includes existing scalar regressions. |
+| Scalar regression | Verified | CI run #119 reports 100% tests passed with zero failures: 346 passed, one skipped, and four disabled (19.66 seconds). This includes existing scalar regressions. |
 | Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | CI run #70 verifies a four-element sum with equal result and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
 | Short design/validation/limitations report | Updated and CI-verified | `docs/PROJECT_REPORT.md` summarizes architecture, the core subset plus selected bit-manipulation and strided-memory stretch work, and validation evidence from CI #73. Final team review before submission remains advisable. |
 
@@ -35,6 +35,8 @@ Last updated: 2026-11-08 (after successful CI run #73)
 
 | Stretch item | Status | Planned validation |
 |---|---|---|
+| Integer vector multiplication | Implemented on branch; vmul.vx CI pending | Added standard `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX), low-SEW-bit products, `v0.t` masking, and tail preservation. CI #119 passed the four `vmul.vv`/dot-product tests; three `vmul.vx` tests are awaiting CI. |
+| Dot-product and SAXPY kernels | Implemented on branch; SAXPY CI pending | Dot product is `vmul.vv` followed by `vredsum.vs`; SAXPY is `vmul.vx` followed by `vadd.vv`. No custom kernel instructions are introduced. |
 | Bit counts | Partially implemented; CI-verified | Added per-element `vclz.v`, `vctz.v`, and `vcpop.v`; CI #70 passed tests for zero input, all supported SEWs, masking, and tail preservation. |
 | AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Partially implemented; CI-verified | Added `vlse8/16/32/64.v` and `vsse8/16/32/64.v` with signed byte strides, optional `v0.t`, bounds/overflow checks, and undo/redo support. CI #73 passed tests for encoding/disassembly, all SEWs, zero and negative stride, masking, and store preflight. Indexed and segment forms remain unsupported. |
@@ -55,7 +57,7 @@ Last updated: 2026-11-08 (after successful CI run #73)
 
 - Vector instruction execution is currently RVSS single-cycle only; the five-stage pipeline is not yet extended.
 - Supported state is VLEN=128, LMUL=1, SEW in {8,16,32,64}.
-- Current vector arithmetic includes `vadd.vv` and `vsub.vv`; logical operations include `vand.vv`, `vor.vv`, and `vxor.vv`. These support optional `v0.t` predication.
+- Current vector arithmetic includes `vadd.vv`, `vsub.vv`, `vmul.vv`, and `vmul.vx`; multiplication is low-SEW-bit only and supports optional `v0.t` predication. `vmul.vv` passed CI #119; `vmul.vx` validation is pending.
 - Current vector comparisons are `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`; they produce packed predicate bits and support optional masking.
 - Current vector memory support includes unit-stride and strided one-field loads/stores with EEW=SEW; strided forms use a signed byte stride from a GPR. Optional `v0.t` masks skip inactive lanes. Indexed and segment forms are not implemented.
 - Selected Zvbb-style instructions now cover element bit counts (`vclz.v`, `vctz.v`, `vcpop.v`), vector AND-NOT (`vandn.vv`), and vector rotates (`vrol.vv`, `vror.vv`). These have encoding/disassembly and execution coverage in CI #73; they do not constitute full Zvbb support.

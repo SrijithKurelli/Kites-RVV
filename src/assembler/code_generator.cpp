@@ -414,6 +414,15 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 code = (0b010010u << 26) | (vm << 25) | (rs1 << 20) |
                        (unary_vs1 << 15) | (0b010u << 12) | (rd << 7) | 0x57u;
             }
+            else if (block.getOpcode() == "vmul.vx")
+            {
+                const uint32_t vs2 = rs1;
+                const uint32_t scalar_rs1 =
+                    static_cast<uint32_t>(std::stoi(block.getRs2().substr(1)));
+                const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
+                code = (0b100101u << 26) | (vm << 25) | (vs2 << 20) |
+                       (scalar_rs1 << 15) | (0b110u << 12) | (rd << 7) | 0x57u;
+            }
             else if (block.getOpcode().rfind("vlse", 0) == 0 ||
                      block.getOpcode().rfind("vsse", 0) == 0 ||
                      block.getOpcode().rfind("vle", 0) == 0 ||

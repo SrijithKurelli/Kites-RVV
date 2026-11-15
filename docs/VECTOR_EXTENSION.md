@@ -48,7 +48,12 @@ masked-off destination lanes remain unchanged. Elements beyond `vl` are preserve
 Vector instructions use the standard 32-bit instruction word layout for the
 implemented encodings. The assembly operand order is `vd, vs2, vs1`.
 
-### Logical vector-vector instructions
+### Selected integer vector multiplication
+
+The following selected standard vector multiply instructions are supported in
+RVSS. Both return only the low `SEW` bits of each product; they do not
+produce widened or high-half results. As a result, signed and unsigned source
+interpretations produce the same low-bit result. Each form accepts an optional
 
 The following operations apply bitwise to each active SEW-sized lane and accept an optional trailing `, v0.t` mask operand:
 
@@ -165,6 +170,8 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_average_selected.s` — masked sum, population count, zero-count guard, and integer average.
 - `vector_bitmanip.s` — selected vector AND-NOT, rotate, leading/trailing-zero, and population-count operations.
 - `vector_strided_memory.s` — positive-stride SEW=32 load/store, selecting every second word.
+- `vector_multiply_dot_product.s` — vector-vector multiplication and dot product using `vmul.vv` plus `vredsum.vs`.
+- `vector_saxpy.s` — SAXPY (`alpha*x + y`) using `vmul.vx` and `vadd.vv`.
 
 See `examples/vector/README.md` for commands and expected results.
 
@@ -173,7 +180,7 @@ See `examples/vector/README.md` for commands and expected results.
 - Vector instructions are implemented only in the RVSS single-cycle processor.
   The five-stage pipeline processors do not support them.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride/strided memory operations support unmasked and `v0.t` masked forms in RVSS.
+- Selected integer multiplication (`vmul.vv` and `vmul.vx`), arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride/strided memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride and selected strided vector loads/stores require `EEW=SEW`; differing element widths, indexed/segment operations, and nonzero `nf` are not implemented.
 - Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
 - Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Indexed/segment memory, pipeline support, and several RVV operations remain unimplemented.
@@ -241,8 +248,11 @@ instruction encoding, arithmetic, logical and selected bit-manipulation operatio
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, unsupported vector memory forms, and
 strided memory assembly/execution across SEWs, zero stride, negative stride
-with masking, and active-address store preflight. All five new strided-memory
-tests passed in CI run #73. The full CMake test suite requires Qt 6.9.2 and
+with masking, and active-address store preflight. Vector multiply tests cover
+OPMVV and OPMVX assembly encoding/disassembly, low-bit wraparound at all four
+SEWs, scalar sign/zero/boundary inputs, and masked/tail preservation. CI run #119
+passed all four `vmul.vv` and dot-product tests; the newly added `vmul.vx` tests
+are awaiting their first CI result. The full CMake test suite requires Qt 6.9.2 and
 GoogleTest. CI run #73 reports 100% tests passed with zero failures out of 343
 CTest tests in 19.77 seconds; four tests were disabled and one was skipped. It
 also smoke-tested all six runnable examples, including `vector_bitmanip.s` and

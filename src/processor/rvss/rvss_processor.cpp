@@ -601,6 +601,33 @@ void RVSSProcessor::ExecuteVector()
         for (size_t byte = 0; byte < element_bytes; ++byte)
             bytes[offset + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xFFu);
     };
+    // OPMVX vmul.vx multiplies each vs2 element by the low SEW bits of rs1.
+    // The low product bits are identical for signed and unsigned interpretations.
+    if (funct3 == 0b110 && funct6 == 0b100101)
+    {
+        const auto source = registers_.ReadVector(vs2);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        const uint64_t scalar = registers_.ReadGpr(vs1) & element_mask;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t product = readElement(source, lane) * scalar;
+            writeElement(result, lane, product & element_mask);
+        }
+
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
     const auto signedLess = [this](uint64_t a, uint64_t b)
     {
         const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1);

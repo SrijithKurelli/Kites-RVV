@@ -376,7 +376,7 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vand.vv", "vor.vv", "vxor.vv",
+    "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -945,6 +945,7 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmul.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
     {"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vxor.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
@@ -1146,7 +1147,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vand.vv", "vor.vv", "vxor.vv",
+        "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -1351,6 +1352,7 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {SyntaxType::O_GPR_C_FPR_C_FPR, "<gp-reg>, <fp-reg>, <fp-reg>"},
         {SyntaxType::O_FPR_C_I_LP_GPR_RP, "<fp-reg>, <imm>(<gp-reg>)"},
         {SyntaxType::O_VEC_C_VEC_C_VEC, "<vec-reg>, <vec-reg>, <vec-reg>"},
+        {SyntaxType::O_VEC_C_VEC_C_GPR, "<vec-reg>, <vec-reg>, <gp-reg>"},
         {SyntaxType::O_VEC_C_VEC, "<vec-reg>, <vec-reg>"},
         {SyntaxType::O_GPR_C_GPR_C_VTYPEI, "<gp-reg>, <gp-reg>, <vtypei>"},
         {SyntaxType::O_VEC_C_LP_GPR_RP, "<vec-reg>, (<gp-reg>)"},
@@ -1524,6 +1526,8 @@ std::string disassemble(uint32_t instruction)
             default: break;
             }
         }
+        if (funct3 == 0b110 && funct6 == 0b100101)
+            return "vmul.vx " + vr(rd) + ", " + vr(rs2) + ", " + xr(rs1) + mask_suffix;
         if (funct3 == 0b110 && funct6 == 0b010000 && rs1 == 0b10000)
             return "vcpop.m " + xr(rd) + ", " + vr(rs2) + mask_suffix;
         return "<unknown-vector>";
