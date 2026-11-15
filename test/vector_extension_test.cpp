@@ -1791,3 +1791,61 @@ TEST(VectorExtension, VsetivliImmediateZeroIsNotTheVsetvliX0AvlForm)
     EXPECT_EQ(vm.vector_sew_, 8u);
     EXPECT_EQ(vm.registers_.ReadGpr(5), 9u);
 }
+
+
+TEST(VectorExtension, VsetivliRejectsInvalidImmediateOperands)
+{
+    EXPECT_THROW(assembleVectorSource("vsetivli x5, 32, 16\n"), std::runtime_error);
+    EXPECT_THROW(assembleVectorSource("vsetivli x5, -1, 16\n"), std::runtime_error);
+    EXPECT_THROW(assembleVectorSource("vsetivli x5, 4, 32\n"), std::runtime_error);
+}
+
+TEST(VectorExtension, VsetivliWithRdZeroStillSetsVectorLength)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 29);
+
+    vm.LoadProgram(assembleVectorSource("vsetivli x0, 3, 16\n"));
+    vm.Step();
+
+    EXPECT_EQ(vm.vector_sew_, 32u);
+    EXPECT_EQ(vm.vector_vl_, 3u);
+    EXPECT_EQ(vm.registers_.ReadGpr(0), 0u);
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 29u);
+}
+
+TEST(VectorExtension, VsetivliDrivesLoadComputeStoreWithImmediateAvl)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    constexpr uint64_t source_address = 0x1000;
+    constexpr uint64_t destination_address = 0x2000;
+
+    vm.registers_.WriteGpr(7, source_address);
+    vm.registers_.WriteGpr(8, destination_address);
+    const uint32_t input[] = {3u, 5u, 7u, 9u};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        vm.memory_controller_.writeWord(source_address + lane * 4, input[lane]);
+        vm.memory_controller_.writeWord(destination_address + lane * 4, 0xA5A5A5A5u);
+    }
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetivli x6, 4, 16\n"
+        "vle32.v v1, (x7)\n"
+        "vadd.vv v2, v1, v1\n"
+        "vse32.v v2, (x8)\n"));
+    for (int instruction = 0; instruction < 4; ++instruction)
+        vm.Step();
+
+    EXPECT_EQ(vm.vector_sew_, 32u);
+    EXPECT_EQ(vm.vector_vl_, 4u);
+    EXPECT_EQ(vm.registers_.ReadGpr(6), 4u);
+    const uint32_t expected[] = {6u, 10u, 14u, 18u};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readElement(vm.registers_, 2, lane, 4), expected[lane]);
+        EXPECT_EQ(vm.memory_controller_.readWord(destination_address + lane * 4), expected[lane]);
+    }
+}

@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (vsetivli implementation staged; CI #129 pending)
+Last updated: 2026-11-16 (CI #129 passed; immediate-AVL negative cases and end-to-end checks added)
 
 ## Must-have core scope
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-16 (vsetivli implementation staged; CI #129 pending)
 |---|---|---|
 | 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #70. |
 | SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
-| Vector configuration / AVL rules | `vsetvli` CI-verified; `vsetivli` awaiting CI #129 | `vsetivli` adds a 5-bit immediate AVL (0–31), with the supported SEW/VTYPE choices, and uses normal `min(AVL,VLMAX)` semantics. The `vsetvli x0,x0` unchanged-VLMAX rule remains separately tested by CI #126. |
+| Vector configuration / AVL rules | `vsetvli` and `vsetivli` CI-verified | `vsetivli` adds a 5-bit immediate AVL (0–31), with the supported SEW/VTYPE choices, and uses normal `min(AVL,VLMAX)` semantics. CI #129 passed encoding/disassembly and all-SEW AVL tests; additional parser-boundary, `rd=x0`, and load-compute-store cases are added for the next run. The `vsetvli x0,x0` unchanged-VLMAX rule remains separately tested by CI #126. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |
@@ -27,9 +27,9 @@ Last updated: 2026-11-16 (vsetivli implementation staged; CI #129 pending)
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #125 built the CLI and smoke-tested all ten vector examples; CI #119/#122/#123 separately exercised the dot-product, SAXPY, cross-product and 2x2 matrix kernels and their result tests. |
-| Scalar regression | Verified | CI #127 reports 100% tests passed with zero failures in 370 non-disabled test cases: 369 passed and one skipped; four tests disabled (20.53 seconds). This includes existing scalar regressions. |
+| Scalar regression | Verified | CI #129 reports 100% tests passed with zero failures in 378 non-disabled test cases: 377 passed and one skipped; four tests disabled (39.57 seconds). This includes existing scalar regressions. |
 | Scalar-vs-vector comparison | Implemented and CI-verified | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate abstract timing tool compares addition, dot product and 2x2 matrix kernels under configurable scheduling assumptions; CI #125/#126 validated its build, tests and CLI input checks. |
-| Short design/validation/limitations report | Updated; final encoding/timing validation pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence, and deferred pipeline/reference work. CI #127 validated masked-`v0` constraints; final team review before submission remains advisable. |
+| Short design/validation/limitations report | Updated; final architecture/reference review pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence, and deferred pipeline/reference work. CI #127 validated masked-`v0` constraints; final team review before submission remains advisable. |
 
 ## Stretch scope
 
@@ -54,7 +54,7 @@ Last updated: 2026-11-16 (vsetivli implementation staged; CI #129 pending)
 | Double-precision FMA instruction classification fix | Implemented; latest CI run passed the existing FMA tests | Upstream classifier omitted D-format FMA opcodes, causing existing double-FMA tests to fail. |
 | Continuous Qt 6.9.2 Linux build/test workflow | Implemented | Gives repeatable compile and regression feedback. |
 | Masked `v0` overlap constraints | Implemented and CI-verified | Masked ordinary vector results/data cannot overlap the `v0` predicate register at a different EEW. Mask-producing comparisons, scalar-result reductions and `vcpop.m` mask-source use are explicit exceptions. Masked vector memory data/destination register `v0` is rejected. All five reserved/permitted/unmasked regression tests passed CI #127. |
-| VMUL independent golden encodings | Added on branch; CI #128 pending | Literal machine words for masked and unmasked `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX) supplement the formula-based assembler checks; values were cross-checked against upstream `riscv-opcodes` and LLVM MC tests. |
+| VMUL independent golden encodings | Implemented and CI-verified | Literal machine words for masked and unmasked `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX) supplement the formula-based assembler checks; values were cross-checked against upstream `riscv-opcodes` and LLVM MC tests and passed CI #128. |
 
 ## Current implementation boundaries
 

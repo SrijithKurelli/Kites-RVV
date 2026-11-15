@@ -145,7 +145,10 @@ Subsequent CI #119 passed 346 tests, with one skipped and four disabled,
 validating `vmul.vv` and the dot-product example. CI #122 passed 349 tests,
 with one skipped and four disabled, validating `vmul.vx` and the SAXPY smoke
 test. CI #123 passed 351 tests, with one skipped and four disabled; the
-cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
+cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested.
+CI #129 passed 377 tests, with one skipped and four disabled; the `vsetivli`
+encoding/disassembly, all-SEW AVL behavior and immediate-zero case passed, and
+all eleven examples were smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
 and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validated the initial timing-model tests and CLI summary/help checks. CI #126 passed 364 tests, skipped one, disabled four, and had zero failures (18.15 seconds); it validated vector configuration/disassembly edge cases, timing input/overflow hardening and strict CLI argument checks. CI #127 passed 369 tests, skipped one and disabled four with zero failures (20.53 seconds); all five masked-`v0` overlap, exception and unmasked-use regression tests passed. The clean build and ten-example/timing-CLI smoke checks also passed.
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 executed all ten runnable assembly examples on RVSS (including bit-manipulation,
