@@ -464,6 +464,8 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 else if (mnemonic == "vredmin.vs") { funct6 = 0b000101; funct3 = 0b010; }
                 else if (mnemonic == "vredmax.vs") { funct6 = 0b000111; funct3 = 0b010; }
                 else if (mnemonic == "vadd.vv") funct6 = 0b000000;
+                else if (mnemonic == "vmul.vv") funct6 = 0b100101;
+                else if (mnemonic == "vmul.vx") { funct6 = 0b100101; funct3 = 0b100; }
                 else if (mnemonic == "vsub.vv") funct6 = 0b000010;
                 else if (mnemonic == "vandn.vv") funct6 = 0b000001;
                 else if (mnemonic == "vand.vv") funct6 = 0b001001;
