@@ -27,6 +27,9 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
         {
             if (block.getOpcode() == "vsetvli")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
+            else if (block.getOpcode() == "vsetivli")
+                code = block.getOpcode() + " " + block.getRd() + ", " +
+                       std::to_string(std::stoi(block.getRs1().substr(1))) + ", " + block.getImm();
             else if (block.getOpcode() == "vcpop.m")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
             else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
@@ -41,7 +44,8 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
                 code = block.getOpcode() + " " + block.getRd() + ", (" + block.getRs1() + ")";
             else
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getRs2();
-            if (block.getImm() == "0" && block.getOpcode() != "vsetvli")
+            if (block.getImm() == "0" && block.getOpcode() != "vsetvli" &&
+                block.getOpcode() != "vsetivli")
                 code += ", v0.t";
         }
         else if (instruction_set::isValidRTypeInstruction(block.getOpcode()))
@@ -395,6 +399,12 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
             {
                 const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
                 code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | 0x57u;
+            }
+            else if (block.getOpcode() == "vsetivli")
+            {
+                const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
+                code = (0b11u << 30) | (zimm << 20) | (rs1 << 15) |
+                       (0b111u << 12) | (rd << 7) | 0x57u;
             }
             else if (block.getOpcode() == "vcpop.m")
             {

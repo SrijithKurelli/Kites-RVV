@@ -19,9 +19,9 @@ claim of complete RISC-V Vector (RVV 1.0) compliance.
 
 ## Supported assembly instructions
 
-### `vsetvli rd, rs1, zimm`
+### `vsetvli rd, rs1, zimm` and `vsetivli rd, uimm, zimm`
 
-The first milestone supports only `zimm` values `0`, `8`, `16`, and `24`.
+Both configuration instructions support only `zimm` values `0`, `8`, `16`, and `24`.
 These select `SEW=8`, `16`, `32`, and `64` respectively, with `LMUL=1` and
 undisturbed tail/mask policy bits. The vector length is
 `vl = min(AVL, VLMAX)`, where `VLMAX = VLEN / SEW`.
@@ -35,6 +35,13 @@ For this subset, the architectural AVL special cases are implemented:
 - Otherwise AVL is read from `x[rs1]`.
 
 When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
+
+`vsetivli` uses a zero-extended 5-bit immediate AVL (`uimm=0..31`) in the
+`rs1` field rather than reading a GPR. It shares the same supported VTYPE
+values (`zimm=0,8,16,24`), computes `vl=min(uimm,VLMAX)`, and writes the result
+to `rd` unless `rd=x0`. An immediate AVL of zero means `vl=0`; it does not
+invoke the `vsetvli rs1=x0` special cases. Its disassembly prints the immediate
+AVL and the 10-bit VTYPE field.
 The disassembler preserves the full 11-bit `zimm[10:0]` field when printing
 `vsetvli` (the assembler intentionally accepts only the four supported
 configurations above).
@@ -221,6 +228,7 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_strided_memory.s` — positive-stride SEW=32 load/store, selecting every second word.
 - `vector_multiply_dot_product.s` — vector-vector multiplication and dot product using `vmul.vv` plus `vredsum.vs`.
 - `vector_saxpy.s` — SAXPY (`alpha*x + y`) using `vmul.vx` and `vadd.vv`.
+- `vector_immediate_config.s` — immediate AVL configuration using `vsetivli`.
 - `vector_cross_product.s` — 3D cross product using two `vmul.vv` operations and `vsub.vv`.
 - `vector_matrix_multiply_2x2.s` — 2x2 matrix multiplication using vector multiplication and sum reductions.
 

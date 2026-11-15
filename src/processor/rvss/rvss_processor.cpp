@@ -510,19 +510,24 @@ void RVSSProcessor::ExecuteVector()
     if ((current_instruction_ & 0x7F) != kVectorOpcode)
         throw std::runtime_error("Invalid vector opcode");
 
-    // vsetvli rd, rs1, zimm: configure SEW/LMUL and derive vl from the AVL rules.
+    // vsetvli and vsetivli share the supported VTYPE and VL update path.
     if (funct3 == 0b111)
     {
-        if ((current_instruction_ & 0x80000000u) != 0)
-            throw std::runtime_error("vsetivli and vsetvl are not supported; use vsetvli");
-        const uint16_t zimm = static_cast<uint16_t>((current_instruction_ >> 20) & 0x7FFu);
+        const uint32_t vset_format = current_instruction_ >> 30;
+        if (vset_format == 0b10)
+            throw std::runtime_error("vsetvl is not supported; use vsetvli or vsetivli");
+        const bool immediate_avl = vset_format == 0b11;
+        const uint16_t zimm = static_cast<uint16_t>(
+            (current_instruction_ >> 20) & (immediate_avl ? 0x3FFu : 0x7FFu));
         if (zimm != 0 && zimm != 8 && zimm != 16 && zimm != 24)
             throw std::runtime_error("Unsupported vtype: this Kites vector subset requires LMUL=1, SEW 8/16/32/64, and undisturbed tail/mask policies");
 
         const uint8_t new_sew = static_cast<uint8_t>(8u << ((zimm >> 3) & 0x7u));
         const uint8_t vlmax = static_cast<uint8_t>(128u / new_sew);
         uint64_t avl = 0;
-        if (rs1 == 0)
+        if (immediate_avl)
+            avl = rs1; // vsetivli carries uimm[4:0] in the rs1 field.
+        else if (rs1 == 0)
         {
             if (vd != 0)
                 avl = UINT64_MAX;

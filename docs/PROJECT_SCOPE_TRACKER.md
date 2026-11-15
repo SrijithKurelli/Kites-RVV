@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (CI #127 passed; VMUL golden and timing-cycle-overflow checks pending)
+Last updated: 2026-11-16 (vsetivli implementation staged; CI #129 pending)
 
 ## Must-have core scope
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-16 (CI #127 passed; VMUL golden and timing-cycle-overflow 
 |---|---|---|
 | 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #70. |
 | SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
-| Vector configuration / AVL rules | Implemented and CI-verified | `rs1=x0, rd=x0` preserves VL only when VLMAX is unchanged; increasing or reducing VLMAX is reserved. Disassembly preserves the full 11-bit `zimm` field. CI #126 passed regressions for VLMAX increase, reduction, no-change and high immediate bits. |
+| Vector configuration / AVL rules | `vsetvli` CI-verified; `vsetivli` awaiting CI #129 | `vsetivli` adds a 5-bit immediate AVL (0–31), with the supported SEW/VTYPE choices, and uses normal `min(AVL,VLMAX)` semantics. The `vsetvli x0,x0` unchanged-VLMAX rule remains separately tested by CI #126. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |

@@ -376,7 +376,7 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+    "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -942,6 +942,7 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"fsd", {SyntaxType::O_FPR_C_I_LP_GPR_RP}},
 
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_VTYPEI}},
+    {"vsetivli", {SyntaxType::O_GPR_C_UIMM_C_VTYPEI}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
@@ -1147,7 +1148,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+        "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -1355,6 +1356,7 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {SyntaxType::O_VEC_C_VEC_C_GPR, "<vec-reg>, <vec-reg>, <gp-reg>"},
         {SyntaxType::O_VEC_C_VEC, "<vec-reg>, <vec-reg>"},
         {SyntaxType::O_GPR_C_GPR_C_VTYPEI, "<gp-reg>, <gp-reg>, <vtypei>"},
+        {SyntaxType::O_GPR_C_UIMM_C_VTYPEI, "<gp-reg>, <uimm[4:0]>, <vtypei>"},
         {SyntaxType::O_VEC_C_LP_GPR_RP, "<vec-reg>, (<gp-reg>)"},
         {SyntaxType::O_GPR_C_VEC, "<gp-reg>, <vec-reg>"},
     };
@@ -1473,6 +1475,16 @@ std::string disassemble(uint32_t instruction)
     {
         if (funct3 == 0b111)
         {
+            const uint32_t vset_format = instruction >> 30;
+            if (vset_format == 0b11)
+            {
+                const uint32_t zimm = (instruction >> 20) & 0x3FFu;
+                const uint32_t avl = (instruction >> 15) & 0x1Fu;
+                return "vsetivli " + xr(rd) + ", " + std::to_string(avl) + ", " +
+                       std::to_string(zimm);
+            }
+            if (vset_format == 0b10)
+                return "vsetvl " + xr(rd) + ", " + xr(rs1) + ", " + xr(rs2);
             const uint16_t zimm = static_cast<uint16_t>((instruction >> 20) & 0x7FFu);
             return "vsetvli " + xr(rd) + ", " + xr(rs1) + ", " + std::to_string(zimm);
         }

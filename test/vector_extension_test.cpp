@@ -1742,3 +1742,52 @@ TEST(VectorExtension, VectorMultiplyEncodingsMatchGoldenWords)
     EXPECT_EQ(program.text_buffer[2], 0x968563D7u);
     EXPECT_EQ(program.text_buffer[3], 0x94B66557u);
 }
+
+
+TEST(VectorExtension, VsetivliEncodesAndDisassemblesImmediateAvl)
+{
+    const auto program = assembleVectorSource("vsetivli x5, 4, 16\n");
+    ASSERT_EQ(program.text_buffer.size(), 1u);
+    EXPECT_EQ(program.text_buffer[0], 0xC10272D7u);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vsetivli x5, 4, 16");
+}
+
+TEST(VectorExtension, VsetivliUsesImmediateAvlAcrossAllSupportedSews)
+{
+    const struct Case { int zimm; uint64_t vlmax; uint32_t sew; } cases[] = {
+        {0, 16, 8}, {8, 8, 16}, {16, 4, 32}, {24, 2, 64},
+    };
+    const uint32_t avls[] = {0, 1, 2, 16, 31};
+
+    for (const auto &test_case : cases)
+    {
+        for (const uint32_t avl : avls)
+        {
+            Kites::setupVmStateDirectory();
+            Kites::RVSSProcessor vm;
+            vm.registers_.WriteGpr(5, 29); // The AVL must come from the immediate.
+            vm.LoadProgram(assembleVectorSource(
+                "vsetivli x6, " + std::to_string(avl) + ", " +
+                std::to_string(test_case.zimm) + "\n"));
+            vm.Step();
+
+            const uint64_t expected = avl < test_case.vlmax ? avl : test_case.vlmax;
+            EXPECT_EQ(vm.vector_vl_, expected);
+            EXPECT_EQ(vm.vector_sew_, test_case.sew);
+            EXPECT_EQ(vm.registers_.ReadGpr(6), expected);
+        }
+    }
+}
+
+TEST(VectorExtension, VsetivliImmediateZeroIsNotTheVsetvliX0AvlForm)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 9);
+    vm.LoadProgram(assembleVectorSource("vsetivli x0, 0, 0\n"));
+    vm.Step();
+    EXPECT_EQ(vm.vector_vl_, 0u);
+    EXPECT_EQ(vm.vector_sew_, 8u);
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 9u);
+}

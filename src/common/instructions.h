@@ -451,6 +451,7 @@ enum class SyntaxType
     O_VEC_C_VEC_C_VEC,   ///< Opcode vector-register, vector-register, vector-register
     O_VEC_C_VEC_C_GPR,   ///< Opcode vector-register, vector-register, general-purpose register
     O_GPR_C_GPR_C_VTYPEI, ///< Opcode GPR, GPR, vector type immediate
+    O_GPR_C_UIMM_C_VTYPEI, ///< Opcode GPR, unsigned AVL immediate, vector type immediate
     O_VEC_C_LP_GPR_RP,   ///< Opcode vector-register, (general-purpose base register)
     O_VEC_C_LP_GPR_RP_C_GPR, ///< Vector register, (base GPR), stride GPR
     O_GPR_C_VEC,         ///< Opcode general-purpose register, vector register

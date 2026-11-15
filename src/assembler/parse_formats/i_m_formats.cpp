@@ -776,6 +776,50 @@ bool Parser::parse_O_GPR_C_GPR_C_VTYPEI()
     return true;
 }
 
+bool Parser::parse_O_GPR_C_UIMM_C_VTYPEI()
+{
+    const unsigned int line = currentToken().line_number;
+    if (peekToken(1).line_number != line || peekToken(1).type != TokenType::GP_REGISTER ||
+        peekToken(2).line_number != line || peekToken(2).type != TokenType::COMMA ||
+        peekToken(3).line_number != line || peekToken(3).type != TokenType::NUM ||
+        peekToken(4).line_number != line || peekToken(4).type != TokenType::COMMA ||
+        peekToken(5).line_number != line || peekToken(5).type != TokenType::NUM ||
+        (peekToken(6).type != TokenType::EOF_ && peekToken(6).line_number == line))
+        return false;
+
+    const int64_t avl = std::stoll(peekToken(3).value);
+    if (avl < 0 || avl > 31)
+    {
+        recordError(ParseError(peekToken(3).line_number,
+                               "Unsupported vsetivli AVL: use an unsigned immediate from 0 to 31"));
+        skipCurrentLine();
+        return true;
+    }
+
+    const int64_t vtypei = std::stoll(peekToken(5).value);
+    if (vtypei != 0 && vtypei != 8 && vtypei != 16 && vtypei != 24)
+    {
+        recordError(ParseError(peekToken(5).line_number,
+                               "Unsupported vtypei: use 0, 8, 16, or 24 (LMUL=1, SEW=8/16/32/64)"));
+        skipCurrentLine();
+        return true;
+    }
+
+    ICUnit block;
+    block.setOpcode(currentToken().value);
+    block.setLineNumber(line);
+    block.setInstructionIndex(instruction_index_);
+    block.setRd(reg_alias_to_name.at(peekToken(1).value));
+    // vsetivli stores the 5-bit AVL immediate in the rs1 field, not a GPR index.
+    block.setRs1("x" + std::to_string(avl));
+    block.setImm(std::to_string(vtypei));
+    skipCurrentLine();
+    intermediate_code_.emplace_back(block, true);
+    instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+    ++instruction_index_;
+    return true;
+}
+
 bool Parser::parse_O_GPR_C_VEC()
 {
     const unsigned int line = currentToken().line_number;

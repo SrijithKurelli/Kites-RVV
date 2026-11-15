@@ -32,9 +32,9 @@ leave an earlier lane partially stored.
 
 ### Configuration
 
-The supported `vsetvli rd, rs1, zimm` subset accepts zimm values 0, 8, 16,
+The supported `vsetvli rd, rs1, zimm` and `vsetivli rd, uimm, zimm` subset accepts zimm values 0, 8, 16,
 and 24, selecting SEW=8, 16, 32, and 64 respectively. LMUL is fixed to 1.
-VL is limited by VLMAX=VLEN/SEW and the scalar AVL value. The implemented
+VL is limited by VLMAX=VLEN/SEW and the AVL operand (a GPR for `vsetvli`, or a zero-extended immediate for `vsetivli`). The implemented
 `rs1=x0` special forms are described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). In particular, `rs1=x0, rd=x0` preserves the current VL only when VLMAX remains unchanged; an increase or reduction is reserved. The disassembler prints all 11 bits of the encoded `zimm` field, while the assembler accepts only the four supported vtype values.
 
 ### Arithmetic, logic, and comparisons
@@ -120,7 +120,7 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The ten vector example programs under `examples/vector/` provide runnable
+The eleven vector example programs under `examples/vector/` provide runnable
 load-compute-store, comparison/count, masked-memory, average,
 selected bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
 cross-product, and 2x2 matrix-multiplication workflows.
@@ -185,8 +185,8 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 - Only the selected integer arithmetic, multiplication, logical, comparison, reduction,
   population-count, unit-stride memory, and strided memory operations listed
   above are implemented.
-- `vsetivli`, `vsetvl`, other vector configuration encodings, and official
-  vector CSRs are not implemented.
+- `vsetvl`, other vector configuration encodings, and official vector CSRs
+  are not implemented. `vsetivli` supports the 5-bit immediate AVL 0–31.
 - Tail and masked-off destination elements follow the undisturbed behavior
   implemented by this subset. Masked operations treat `v0` as the implicit
   EEW=1 predicate source: ordinary data sources and ordinary vector destinations
