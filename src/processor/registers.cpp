@@ -26,6 +26,7 @@ void RegisterFile::Reset()
     for (auto &reg : vreg_) reg.fill(0);
     csr_.fill(0);
     csr_[0x002] = 0b000; // Default: RNE (IEEE 754)
+    csr_[0xC22] = 16;    // VLENB = VLEN / 8 = 128 / 8.
     emit registerResetSignal();
 }
 
