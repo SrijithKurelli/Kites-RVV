@@ -1282,9 +1282,12 @@ TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
         "vmul.vv v1, v2, v3\\n"
         "vmul.vv v4, v5, v6, v0.t\\n"
         "vmul.vx v7, v8, x9\\n"
-        "vmul.vx v10, v11, a0, v0.t\\n");
+        "vmul.vx v10, v11, a0, v0.t\\n"
+        "vadd.vx v12, v13, x14\\n"
+        "vadd.vi v15, v16, -3\\n"
+        "vadd.vi v17, v18, 15, v0.t\\n");
 
-    ASSERT_EQ(program.text_buffer.size(), 4u);
+    ASSERT_EQ(program.text_buffer.size(), 7u);
     const uint32_t vmul_vv =
         (0b100101u << 26) | (1u << 25) | (2u << 20) | (3u << 15) | (1u << 7) | 0x57u;
     const uint32_t masked_vmul_vv =
@@ -1304,6 +1307,17 @@ TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
               "vmul.vv v1, v2, v3");
     EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[2]),
               "vmul.vx v7, v8, x9");
+    EXPECT_EQ(program.text_buffer[4],
+              (1u << 25) | (13u << 20) | (14u << 15) | (0b100u << 12) |
+              (12u << 7) | 0x57u);
+    EXPECT_EQ(program.text_buffer[5],
+              (16u << 20) | (29u << 15) | (0b011u << 12) | (15u << 7) | 0x57u);
+    EXPECT_EQ(program.text_buffer[6],
+              (18u << 20) | (15u << 15) | (0b011u << 12) | (17u << 7) | 0x57u);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[4]),
+              "vadd.vx v12, v13, x14");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[5]),
+              "vadd.vi v15, v16, -3");
 }
 
 TEST(VectorExtension, VectorMultiplyExecutesForEverySupportedSEW)
@@ -1337,8 +1351,12 @@ TEST(VectorExtension, VectorMultiplyExecutesForEverySupportedSEW)
         const std::string source =
             "vsetvli x7, x5, " + std::to_string(test_case.zimm) + "\\n" +
             "vmul.vv v3, v1, v2\\n"
-            "vmul.vx v4, v1, x6\\n";
+            "vmul.vx v4, v1, x6\\n"
+            "vadd.vx v5, v1, x6\\n"
+            "vadd.vi v6, v1, -2\\n";
         manager.loadProgram(assembleVectorSource(source));
+        manager.step();
+        manager.step();
         manager.step();
         manager.step();
         manager.step();
@@ -1351,6 +1369,10 @@ TEST(VectorExtension, VectorMultiplyExecutesForEverySupportedSEW)
                       (a * b) & element_mask);
             EXPECT_EQ(readElement(*registers, 4, lane, test_case.element_bytes),
                       (a * scalar) & element_mask);
+            EXPECT_EQ(readElement(*registers, 5, lane, test_case.element_bytes),
+                      (a + scalar) & element_mask);
+            EXPECT_EQ(readElement(*registers, 6, lane, test_case.element_bytes),
+                      (a - 2u) & element_mask);
         }
     }
 }
