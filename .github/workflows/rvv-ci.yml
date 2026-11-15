@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - rvv/milestone-1
+      - rvv/milestone-2-compute-kernels
   pull_request:
     branches:
       - main
