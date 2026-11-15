@@ -39,11 +39,17 @@ When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
 ### `vadd.vv vd, vs2, vs1` and `vsub.vv vd, vs2, vs1`
 
 These operations use the current `SEW` and operate on the first `vl` elements.
-Addition and subtraction wrap modulo the element width. Each form also accepts
-an optional `, v0.t` operand (for example, `vadd.vv vd, vs2, vs1, v0.t`).
-When masked, only lanes with the corresponding `v0` predicate bit set execute;
-masked-off destination lanes remain unchanged. Elements beyond `vl` are preserved
-(tail-undisturbed).
+Addition, subtraction, and multiplication wrap modulo the element width. The
+following multiplication forms are implemented:
+
+- `vmul.vv vd, vs2, vs1` — multiply corresponding vector elements.
+- `vmul.vx vd, vs2, rs1` — multiply each vector element by the scalar GPR value.
+
+Both multiplication forms accept an optional `, v0.t` mask operand. Only the
+low SEW bits of each product are written, so the result is the product modulo
+`2^SEW`. When masked, only lanes with the corresponding `v0` predicate bit set
+execute; masked-off destination lanes remain unchanged. Elements beyond `vl`
+are preserved (tail-undisturbed).
 
 Vector instructions use the standard 32-bit instruction word layout for the
 implemented encodings. The assembly operand order is `vd, vs2, vs1`.
