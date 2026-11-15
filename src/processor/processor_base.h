@@ -83,6 +83,8 @@ struct StepDelta
     uint8_t new_vector_sew{8};
     uint8_t old_vector_vl{0};
     uint8_t new_vector_vl{0};
+    uint64_t old_vector_vtype{0};
+    uint64_t new_vector_vtype{0};
 };
 
 /**
