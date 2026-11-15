@@ -452,11 +452,13 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
             {
                 // Assembly syntax is vd, vs2, vs1. The encoded instruction
                 // stores vs2 in bits [24:20] and vs1 in bits [19:15].
-                const uint32_t vs1 = static_cast<uint32_t>(std::stoi(block.getRs2().substr(1)));
+                const std::string &mnemonic = block.getOpcode();
+                const uint32_t vs1 = mnemonic == "vadd.vi"
+                    ? (static_cast<uint32_t>(std::stoi(block.getRs2())) & 0x1Fu)
+                    : static_cast<uint32_t>(std::stoi(block.getRs2().substr(1)));
                 const uint32_t vs2 = rs1;
                 uint32_t funct6 = 0;
                 uint32_t funct3 = 0b000;
-                const std::string &mnemonic = block.getOpcode();
                 if (mnemonic == "vredsum.vs") { funct6 = 0b000000; funct3 = 0b010; }
                 else if (mnemonic == "vredand.vs") { funct6 = 0b000001; funct3 = 0b010; }
                 else if (mnemonic == "vredor.vs") { funct6 = 0b000010; funct3 = 0b010; }
@@ -464,6 +466,8 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 else if (mnemonic == "vredmin.vs") { funct6 = 0b000101; funct3 = 0b010; }
                 else if (mnemonic == "vredmax.vs") { funct6 = 0b000111; funct3 = 0b010; }
                 else if (mnemonic == "vadd.vv") funct6 = 0b000000;
+                else if (mnemonic == "vadd.vx") { funct6 = 0b000000; funct3 = 0b100; }
+                else if (mnemonic == "vadd.vi") { funct6 = 0b000000; funct3 = 0b011; }
                 else if (mnemonic == "vmul.vv") funct6 = 0b100101;
                 else if (mnemonic == "vmul.vx") { funct6 = 0b100101; funct3 = 0b100; }
                 else if (mnemonic == "vsub.vv") funct6 = 0b000010;
