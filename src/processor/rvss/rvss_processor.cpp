@@ -1668,6 +1668,14 @@ void RVSSProcessor::WriteBackCsr()
     }
     }
 
+    // vxsat and vxrm each have narrower architectural widths.
+    if (csr_target_address_ == 0x009)
+        registers_.WriteCsr(0x009, registers_.ReadCsr(0x009) & 0x1u);
+    else if (csr_target_address_ == 0x00A)
+        registers_.WriteCsr(0x00A, registers_.ReadCsr(0x00A) & 0x3u);
+    else if (csr_target_address_ == 0x00F)
+        registers_.WriteCsr(0x00F, registers_.ReadCsr(0x00F) & 0x7u);
+
     // vcsr is the architectural packed view of vxsat and vxrm.
     if (csr_target_address_ == 0x00F)
     {
