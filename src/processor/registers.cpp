@@ -179,12 +179,22 @@ const std::unordered_set<std::string> valid_floating_point_registers = {
     "ft24", "ft25", "ft26", "ft27", "ft28", "ft29", "ft30", "ft31",
 };
 
-const std::unordered_set<std::string> valid_csr_registers = {"fflags", "frm", "fcsr"};
+const std::unordered_set<std::string> valid_csr_registers = {
+    "fflags", "frm", "fcsr",
+    "vstart", "vxsat", "vxrm", "vcsr", "vl", "vtype", "vlenb"
+};
 
 const std::unordered_map<std::string, int> csr_to_address{
     {"fflags", 0x001},
     {"frm", 0x002},
     {"fcsr", 0x003},
+    {"vstart", 0x008},
+    {"vxsat", 0x009},
+    {"vxrm", 0x00A},
+    {"vcsr", 0x00F},
+    {"vl", 0xC20},
+    {"vtype", 0xC21},
+    {"vlenb", 0xC22},
 };
 
 const std::unordered_map<std::string, std::string> reg_alias_to_name = {
