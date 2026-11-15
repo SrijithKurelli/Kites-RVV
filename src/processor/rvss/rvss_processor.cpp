@@ -530,8 +530,8 @@ void RVSSProcessor::ExecuteVector()
             {
                 const uint8_t old_vlmax = static_cast<uint8_t>(128u / vector_sew_);
                 avl = vector_vl_;
-                if (vlmax < old_vlmax)
-                    throw std::runtime_error("vsetvli x0, x0 must not reduce VLMAX (reserved form)");
+                if (vlmax != old_vlmax)
+                    throw std::runtime_error("vsetvli x0, x0 requires unchanged VLMAX (reserved form)");
             }
         }
         else
@@ -726,13 +726,13 @@ void RVSSProcessor::ExecuteVector()
     
     if (funct3 == 0b010)
     {
-        if (vector_vl_ == 0)
-            return; // RVV reductions leave vd unchanged when vl=0.
         const bool supported_reduction =
             funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
             funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111;
         if (!supported_reduction)
             throw std::runtime_error("Unsupported vector reduction instruction");
+        if (vector_vl_ == 0)
+            return; // Supported RVV reductions leave vd unchanged when vl=0.
 
         const auto source = registers_.ReadVector(vs2);
         const auto seed = registers_.ReadVector(vs1);

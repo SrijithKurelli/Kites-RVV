@@ -29,12 +29,15 @@ undisturbed tail/mask policy bits. The vector length is
 For this subset, the architectural AVL special cases are implemented:
 
 - `rs1=x0`, `rd!=x0`: AVL is the maximum unsigned value, so `vl=VLMAX`.
-- `rs1=x0`, `rd=x0`: the current `vl` is reused and preserved. The subset
-  rejects this reserved form whenever the new configuration reduces the previous
-  `VLMAX`, even if the old `vl` would still fit in the smaller vector length.
+- `rs1=x0`, `rd=x0`: the current `vl` is reused and preserved only when
+  the new configuration leaves `VLMAX` unchanged. Any `VLMAX` change—an
+  increase or a reduction—is reserved and traps in this subset.
 - Otherwise AVL is read from `x[rs1]`.
 
 When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
+The disassembler preserves the full 11-bit `zimm[10:0]` field when printing
+`vsetvli` (the assembler intentionally accepts only the four supported
+configurations above).
 
 ### `vadd.vv vd, vs2, vs1` and `vsub.vv vd, vs2, vs1`
 

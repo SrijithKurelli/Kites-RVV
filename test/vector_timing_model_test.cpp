@@ -3,6 +3,7 @@
 #include "profiler/vector_timing_model.h"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -151,4 +152,53 @@ TEST(VectorTimingModel, AddsConfiguredExtraMemoryDelay)
     ASSERT_EQ(summary.trace.size(), 1u);
     EXPECT_EQ(summary.trace[0].completion_cycle, 12u);
     EXPECT_EQ(summary.estimated_cycles, 12u);
+}
+
+
+TEST(VectorTimingModel, RejectsZeroRequiredTimingParameters)
+{
+    TimingConfig config;
+    config.issue_interval_cycles = 0;
+    EXPECT_THROW(static_cast<void>(VectorTimingModel{config}), std::invalid_argument);
+
+    config = TimingConfig{};
+    config.scalar_latency_cycles = 0;
+    EXPECT_THROW(static_cast<void>(VectorTimingModel{config}), std::invalid_argument);
+
+    config = TimingConfig{};
+    config.vector_group_latency_cycles = 0;
+    EXPECT_THROW(static_cast<void>(VectorTimingModel{config}), std::invalid_argument);
+
+    config = TimingConfig{};
+    config.memory_latency_cycles = 0;
+    EXPECT_THROW(static_cast<void>(VectorTimingModel{config}), std::invalid_argument);
+
+    config = TimingConfig{};
+    config.vector_startup_latency_cycles = 0;
+    config.reduction_extra_latency_cycles = 0;
+    EXPECT_NO_THROW(static_cast<void>(VectorTimingModel{config}));
+}
+
+TEST(VectorTimingModel, RejectsPerInstructionLaneSlotOverflow)
+{
+    TimingConfig config;
+    config.lanes = std::numeric_limits<std::size_t>::max() / 2 + 1;
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"vadd.vv", TimingOpKind::VectorALU, "v3", {"v1", "v2"},
+         std::numeric_limits<std::size_t>::max()},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
+}
+
+TEST(VectorTimingModel, RejectsAccumulatedLaneSlotOverflow)
+{
+    TimingConfig config;
+    config.lanes = std::numeric_limits<std::size_t>::max() / 2 + 1;
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"vadd.vv", TimingOpKind::VectorALU, "v3", {"v1", "v2"}, 1},
+        {"vadd.vv", TimingOpKind::VectorALU, "v4", {"v5", "v6"}, 1},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
 }

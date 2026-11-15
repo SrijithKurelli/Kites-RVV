@@ -94,6 +94,19 @@ jobs:
           timing_help="$(./build/ci/kites-vector-timing --help)"
           grep -Fq 'Usage: kites-vector-timing' <<< "$timing_help"
 
+          if ./build/ci/kites-vector-timing --lanes 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted --lanes 0"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --memory-delay -1 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a negative memory delay"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --lanes 4junk --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a partially parsed lane count"
+            exit 1
+          fi
+
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen

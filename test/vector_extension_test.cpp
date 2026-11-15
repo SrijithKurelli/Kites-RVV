@@ -554,14 +554,14 @@ TEST(VectorExtension, VsetvliUsesArchitecturalX0AvlRules)
     vm.registers_.WriteGpr(5, 4);
     vm.LoadProgram(assembleVectorSource(
         "vsetvli x6, x5, 8\n"  // SEW=16, VL=4
-        "vsetvli x0, x0, 0\n" // SEW=8; preserve the current VL=4
+        "vsetvli x0, x0, 8\n" // Same VLMAX: preserve the current VL=4
         ""));
     vm.Step();
     ASSERT_EQ(vm.vector_vl_, 4u);
     EXPECT_EQ(vm.registers_.ReadGpr(6), 4u);
     vm.Step();
     EXPECT_EQ(vm.vector_vl_, 4u); // rs1=x0, rd=x0 preserves current vl
-    EXPECT_EQ(vm.vector_sew_, 8u);
+    EXPECT_EQ(vm.vector_sew_, 16u);
 
     vm.Reset();
     vm.LoadProgram(assembleVectorSource("vsetvli x6, x0, 8\n"));
@@ -667,21 +667,21 @@ TEST(VectorExtension, ArithmeticWorksForEverySupportedSew)
     }
 }
 
-TEST(VectorExtension, X0AvlFormRejectsAnyVLMAXReduction)
+TEST(VectorExtension, X0AvlFormRejectsVLMAXIncrease)
 {
     Kites::setupVmStateDirectory();
     Kites::RVSSProcessor vm;
     vm.registers_.WriteGpr(5, 4);
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 0\n"  // SEW=8, VLMAX=16, VL=4
-        "vsetvli x0, x0, 8\n" // SEW=16, VLMAX=8: reduction is reserved even though VL fits
+        "vsetvli x6, x5, 8\n"  // SEW=16, VLMAX=8, VL=4
+        "vsetvli x0, x0, 0\n" // SEW=8, VLMAX=16: any VLMAX change is reserved
         ""));
     vm.Step();
     ASSERT_EQ(vm.vector_vl_, 4u);
-    ASSERT_EQ(vm.vector_sew_, 8u);
+    ASSERT_EQ(vm.vector_sew_, 16u);
     EXPECT_THROW(vm.Step(), std::runtime_error);
     EXPECT_EQ(vm.vector_vl_, 4u);
-    EXPECT_EQ(vm.vector_sew_, 8u);
+    EXPECT_EQ(vm.vector_sew_, 16u);
 }
 
 TEST(VectorExtension, ReservedX0AvlFormDoesNotPartiallyChangeConfiguration)
@@ -1598,4 +1598,30 @@ TEST(VectorExtension, MatrixMultiply2x2UsesVectorMultiplyAndReduction)
                       static_cast<uint32_t>(expected[row][column]));
         }
     }
+}
+
+
+TEST(VectorExtension, DisassemblerPreservesAllVsetvliImmediateBits)
+{
+    const uint32_t instruction =
+        (0x100u << 20) | (6u << 15) | (0b111u << 12) | (5u << 7) | 0x57u;
+    EXPECT_EQ(Kites::instruction_set::disassemble(instruction),
+              "vsetvli x5, x6, 256");
+}
+
+TEST(VectorExtension, UnsupportedReductionStillTrapsWhenVlIsZero)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 0);
+    auto program = assembleVectorSource("vsetvli x6, x5, 16\n");
+    const uint32_t unsupported_reduction =
+        (0b111111u << 26) | (1u << 25) | (2u << 20) |
+        (3u << 15) | (0b010u << 12) | (4u << 7) | 0x57u;
+    program.text_buffer.push_back(unsupported_reduction);
+    vm.LoadProgram(program);
+
+    vm.Step();
+    EXPECT_EQ(vm.vector_vl_, 0u);
+    EXPECT_THROW(vm.Step(), std::runtime_error);
 }

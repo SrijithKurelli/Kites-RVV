@@ -1,7 +1,10 @@
 #include "profiler/vector_timing_model.h"
 
+#include <charconv>
 #include <cstdlib>
+#include <system_error>
 #include <iomanip>
+#include <limits>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -128,12 +131,26 @@ void printSummary(const TimingSummary &summary, bool show_trace)
     }
 }
 
-int parsePositive(const std::string &option, const char *name)
+std::uint64_t parseUnsigned(const std::string &option, const char *name,
+                             bool allow_zero)
 {
-    const int value = std::stoi(option);
-    if (value <= 0)
-        throw std::invalid_argument(std::string(name) + " must be positive");
+    std::uint64_t value = 0;
+    const char *begin = option.data();
+    const char *end = begin + option.size();
+    const auto [parsed_end, error] = std::from_chars(begin, end, value, 10);
+    if (error != std::errc{} || parsed_end != end || (!allow_zero && value == 0))
+        throw std::invalid_argument(std::string(name) +
+                                    (allow_zero ? " must be a non-negative integer"
+                                                : " must be a positive integer"));
     return value;
+}
+
+std::size_t parsePositiveSize(const std::string &option, const char *name)
+{
+    const std::uint64_t value = parseUnsigned(option, name, false);
+    if (value > std::numeric_limits<std::size_t>::max())
+        throw std::out_of_range(std::string(name) + " exceeds size_t range");
+    return static_cast<std::size_t>(value);
 }
 
 void printUsage()
@@ -170,27 +187,22 @@ int main(int argc, char **argv)
             else if (arg == "--no-trace")
                 show_trace = false;
             else if (arg == "--lanes" && index + 1 < argc)
-                config.lanes = static_cast<std::size_t>(parsePositive(argv[++index], "--lanes"));
+                config.lanes = parsePositiveSize(argv[++index], "--lanes");
             else if (arg == "--issue-interval" && index + 1 < argc)
-                config.issue_interval_cycles =
-                    static_cast<std::uint64_t>(parsePositive(argv[++index], "--issue-interval"));
+                config.issue_interval_cycles = parseUnsigned(argv[++index], "--issue-interval", false);
             else if (arg == "--startup" && index + 1 < argc)
-                config.vector_startup_latency_cycles =
-                    static_cast<std::uint64_t>(parsePositive(argv[++index], "--startup"));
+                config.vector_startup_latency_cycles = parseUnsigned(argv[++index], "--startup", true);
             else if (arg == "--vector-group" && index + 1 < argc)
-                config.vector_group_latency_cycles =
-                    static_cast<std::uint64_t>(parsePositive(argv[++index], "--vector-group"));
+                config.vector_group_latency_cycles = parseUnsigned(argv[++index], "--vector-group", false);
             else if (arg == "--scalar-latency" && index + 1 < argc)
-                config.scalar_latency_cycles =
-                    static_cast<std::uint64_t>(parsePositive(argv[++index], "--scalar-latency"));
+                config.scalar_latency_cycles = parseUnsigned(argv[++index], "--scalar-latency", false);
             else if (arg == "--reduction-extra" && index + 1 < argc)
                 config.reduction_extra_latency_cycles =
-                    static_cast<std::uint64_t>(std::stoul(argv[++index]));
+                    parseUnsigned(argv[++index], "--reduction-extra", true);
             else if (arg == "--memory-latency" && index + 1 < argc)
-                config.memory_latency_cycles =
-                    static_cast<std::uint64_t>(parsePositive(argv[++index], "--memory-latency"));
+                config.memory_latency_cycles = parseUnsigned(argv[++index], "--memory-latency", false);
             else if (arg == "--memory-delay" && index + 1 < argc)
-                memory_delay = static_cast<std::uint64_t>(std::stoul(argv[++index]));
+                memory_delay = parseUnsigned(argv[++index], "--memory-delay", true);
             else
                 throw std::invalid_argument("Unknown or incomplete option: " + arg);
         }

@@ -32,7 +32,11 @@ Default parameters are:
 
 Every parameter can be changed from the command line. Run
 `./build/ci/kites-vector-timing --help` for the accepted options (or invoke the
-tool with no options to use the defaults).
+tool with no options to use the defaults). Integer arguments are parsed strictly:
+partial values, negatives and out-of-range numbers are rejected. Lane count,
+issue interval, scalar latency, vector-group latency and base memory latency
+must be positive. Startup latency, reduction extra latency and extra memory
+delay may be zero.
 
 ## Scheduling model
 
@@ -67,6 +71,10 @@ completion = issue + startup + groups \times group\_latency
 Only the overheads relevant to an operation kind are included. Scalar ALU
 operations complete at `issue + scalar_latency`. The estimated program cycle
 count is the maximum completion cycle of its operations.
+
+Lane-slot and active-element counters use checked `size_t` arithmetic and
+report overflow rather than wrapping. Cycle and latency arithmetic is also
+checked for `uint64_t` overflow.
 
 The model does not simulate cache hierarchy, memory banking, vector register
 ports, out-of-order issue, precise pipeline stages, branch prediction,
@@ -129,9 +137,10 @@ example:
 ## Validation
 
 Unit tests cover lane-group rounding and utilisation, read-after-write stalls,
-serialized memory stalls, lane-count sensitivity, invalid zero-lane
-configurations, and empty programs. The CI workflow builds the timing tool,
-runs its summary-mode smoke test, and runs the full CTest suite.
+serialized memory stalls, lane-count sensitivity, invalid lane/latency
+configurations, zero-valued optional latencies, per-operation and accumulated
+counter overflow, and empty programs. CI also checks that the CLI rejects
+negative, partially parsed and invalid zero-valued arguments.
 
 The scalar/vector comparisons are estimates from this model's stated
 assumptions. They are not cycle measurements from the functional RVSS

@@ -25,6 +25,20 @@ Cycle checkedMultiply(Cycle lhs, Cycle rhs)
     return lhs * rhs;
 }
 
+std::size_t checkedSizeAdd(std::size_t lhs, std::size_t rhs)
+{
+    if (rhs > std::numeric_limits<std::size_t>::max() - lhs)
+        throw std::overflow_error("Vector timing element/slot count overflow");
+    return lhs + rhs;
+}
+
+std::size_t checkedSizeMultiply(std::size_t lhs, std::size_t rhs)
+{
+    if (lhs != 0 && rhs > std::numeric_limits<std::size_t>::max() / lhs)
+        throw std::overflow_error("Vector timing lane-slot count overflow");
+    return lhs * rhs;
+}
+
 bool isVector(TimingOpKind kind)
 {
     return kind != TimingOpKind::ScalarALU;
@@ -96,7 +110,7 @@ TimingSummary VectorTimingModel::simulate(
             vector_operation && instruction.active_elements != 0
                 ? ((instruction.active_elements - 1) / config_.lanes) + 1
                 : 0;
-        const std::size_t lane_slots = lane_groups * config_.lanes;
+        const std::size_t lane_slots = checkedSizeMultiply(lane_groups, config_.lanes);
 
         Cycle latency = vector_operation ? config_.vector_startup_latency_cycles
                                          : config_.scalar_latency_cycles;
@@ -125,8 +139,9 @@ TimingSummary VectorTimingModel::simulate(
         if (vector_operation)
         {
             ++summary.vector_instruction_count;
-            summary.active_vector_elements += instruction.active_elements;
-            summary.lane_slots += lane_slots;
+            summary.active_vector_elements =
+                checkedSizeAdd(summary.active_vector_elements, instruction.active_elements);
+            summary.lane_slots = checkedSizeAdd(summary.lane_slots, lane_slots);
         }
         summary.estimated_cycles = std::max(summary.estimated_cycles, completion_cycle);
 

@@ -1473,7 +1473,7 @@ std::string disassemble(uint32_t instruction)
     {
         if (funct3 == 0b111)
         {
-            const uint8_t zimm = (instruction >> 20) & 0x7F;
+            const uint16_t zimm = static_cast<uint16_t>((instruction >> 20) & 0x7FFu);
             return "vsetvli " + xr(rd) + ", " + xr(rs1) + ", " + std::to_string(zimm);
         }
         const uint8_t funct6 = (instruction >> 26) & 0x3F;

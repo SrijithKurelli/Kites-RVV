@@ -35,7 +35,7 @@ leave an earlier lane partially stored.
 The supported `vsetvli rd, rs1, zimm` subset accepts zimm values 0, 8, 16,
 and 24, selecting SEW=8, 16, 32, and 64 respectively. LMUL is fixed to 1.
 VL is limited by VLMAX=VLEN/SEW and the scalar AVL value. The implemented
-`rs1=x0` special forms are described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md).
+`rs1=x0` special forms are described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). In particular, `rs1=x0, rd=x0` preserves the current VL only when VLMAX remains unchanged; an increase or reduction is reserved. The disassembler prints all 11 bits of the encoded `zimm` field, while the assembler accepts only the four supported vtype values.
 
 ### Arithmetic, logic, and comparisons
 
@@ -142,7 +142,7 @@ validating `vmul.vv` and the dot-product example. CI #122 passed 349 tests,
 with one skipped and four disabled, validating `vmul.vx` and the SAXPY smoke
 test. CI #123 passed 351 tests, with one skipped and four disabled; the
 cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
-and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237).
+and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validates the timing-model baseline and its CLI smoke checks.
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 executed all six runnable assembly examples on RVSS (including bit-manipulation
 and strided-memory examples), asserted that the average example prints `2`, and
@@ -193,6 +193,9 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
   listed above.
 - The abstract timing model does not integrate vector instructions into the
   five-stage pipeline variants and is not a cycle-accurate processor model.
+  An architecture audit found that pipeline registers and hazard detection
+  currently track GPR/FPR state only; a correct vector pipeline extension needs
+  coordinated vector state, decode, execution, writeback and hazard changes.
 
 ## 8. Stretch work and deferred items
 
