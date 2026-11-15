@@ -394,8 +394,16 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
         if (instruction_set::isValidVectorInstruction(block.getOpcode()))
         {
             const uint32_t rd = static_cast<uint32_t>(std::stoi(block.getRd().substr(1)));
-            const uint32_t rs1 = static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
-            if (block.getOpcode() == "vsetvli")
+            const uint32_t rs1 = block.getOpcode() == "vsetivli"
+                ? static_cast<uint32_t>(std::stoul(block.getRs1()))
+                : static_cast<uint32_t>(std::stoi(block.getRs1().substr(1)));
+            if (block.getOpcode() == "vsetivli")
+            {
+                const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
+                code = (0b11u << 30) | (zimm << 20) | (rs1 << 15) |
+                       (0b111u << 12) | (rd << 7) | 0x57u;
+            }
+            else if (block.getOpcode() == "vsetvli")
             {
                 const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
                 code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | 0x57u;
