@@ -714,18 +714,23 @@ void RVSSProcessor::ExecuteVector()
     }
   // Comparison Instructions
     
-    if (funct3 != 0b000)
-        throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
+    const bool vector_scalar_multiply = funct3 == 0b100 && funct6 == 0b100101;
+    if (funct3 != 0b000 && !vector_scalar_multiply)
+        throw std::runtime_error("Unsupported vector operand format; this subset supports OPIVV and vmul.vx");
 
     const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
     const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000001 ||
         funct6 == 0b000010 || funct6 == 0b001001 || funct6 == 0b001010 ||
-        funct6 == 0b001011 || funct6 == 0b010100 || funct6 == 0b010101;
+        funct6 == 0b001011 || funct6 == 0b010100 || funct6 == 0b010101 ||
+        funct6 == 0b100101;
     if (!comparison && !arithmetic_or_logic)
         throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
 
     const auto lhs = registers_.ReadVector(vs2);
-    const auto rhs = registers_.ReadVector(vs1);
+    std::array<uint8_t, 16> rhs{};
+    if (!vector_scalar_multiply)
+        rhs = registers_.ReadVector(vs1);
+    const uint64_t scalar_operand = registers_.ReadGpr(vs1) & element_mask;
     auto result = registers_.ReadVector(vd);
     const auto old_destination = result;
     for (size_t lane = 0; lane < vector_vl_; ++lane)
@@ -733,7 +738,7 @@ void RVSSProcessor::ExecuteVector()
         if (!lane_is_active(lane))
             continue;
         const uint64_t a = readElement(lhs, lane);
-        const uint64_t b = readElement(rhs, lane);
+        const uint64_t b = vector_scalar_multiply ? scalar_operand : readElement(rhs, lane);
         if (comparison)
         {
             bool predicate = false;
@@ -759,6 +764,7 @@ void RVSSProcessor::ExecuteVector()
             uint64_t value = 0;
             switch (funct6)
             {
+            case 0b100101: value = (a * b) & element_mask; break; // vmul.vv / vmul.vx
             case 0b000000: value = (a + b) & element_mask; break;
             case 0b000001: value = a & (~b) & element_mask; break; // vandn.vv
             case 0b000010: value = (a - b) & element_mask; break;
