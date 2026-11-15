@@ -50,6 +50,7 @@ class RVSSProcessor : public ProcessorBase
     // RVV subset state: VLEN=128, LMUL=1; only SEW 8/16/32/64 is supported.
     uint8_t vector_sew_ = 8;
     uint8_t vector_vl_ = 0;
+    uint64_t vector_vtype_ = 0;
 
     std::stack<StepDelta> undo_stack_;
     std::stack<StepDelta> redo_stack_;
