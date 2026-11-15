@@ -585,6 +585,38 @@ void RVSSProcessor::ExecuteVector()
         return;
     }
 
+    // Masked vector instructions read v0 as an implicit EEW=1 source.
+    // Ordinary data sources cannot also use v0 at EEW=SEW, and ordinary
+    // vector destinations cannot overwrite v0. Comparisons (mask results)
+    // and reductions (scalar result in element 0) are the ISA exceptions.
+    const bool supported_reduction_encoding =
+        funct3 == 0b010 &&
+        (funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
+         funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111);
+    const bool vector_unary_bit_count =
+        funct3 == 0b010 && funct6 == 0b010010 &&
+        (vs1 == 0b01100 || vs1 == 0b01101 || vs1 == 0b01110);
+    const bool vector_vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
+    const bool mask_producing_comparison =
+        funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
+
+    if (!vm)
+    {
+        const bool vs2_is_vector_data =
+            funct3 == 0b000 || supported_reduction_encoding ||
+            vector_unary_bit_count || vector_vector_multiply ||
+            (funct3 == 0b110 && funct6 == 0b100101);
+        const bool vs1_is_vector_data =
+            funct3 == 0b000 || supported_reduction_encoding || vector_vector_multiply;
+
+        if ((vs2_is_vector_data && vs2 == 0) || (vs1_is_vector_data && vs1 == 0))
+            throw std::runtime_error(
+                "Masked vector data sources cannot overlap v0 (mask EEW differs from data EEW)");
+        if (vd == 0 && !mask_producing_comparison && !supported_reduction_encoding)
+            throw std::runtime_error(
+                "Masked vector destination cannot overlap v0 unless it writes a mask or scalar reduction result");
+    }
+
     const size_t element_bytes = vector_sew_ / 8;
     const uint64_t element_mask = vector_sew_ == 64 ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
     const auto readElement = [element_bytes](const auto &bytes, size_t lane)
@@ -726,10 +758,7 @@ void RVSSProcessor::ExecuteVector()
     
     if (funct3 == 0b010)
     {
-        const bool supported_reduction =
-            funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
-            funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111;
-        if (!supported_reduction)
+        if (!supported_reduction_encoding)
             throw std::runtime_error("Unsupported vector reduction instruction");
         if (vector_vl_ == 0)
             return; // Supported RVV reductions leave vd unchanged when vl=0.
@@ -1104,6 +1133,13 @@ void RVSSProcessor::WriteMemory()
             (!is_strided && lumop_or_sumop != 0))
             throw std::runtime_error(
                 "Only unit-stride and strided one-field vector loads/stores are supported");
+
+        // For a masked load, v0 cannot be the destination. For a masked
+        // store, v0 cannot be the data source because it is also read as
+        // the implicit mask operand with a different EEW.
+        if (!vm && vector_register == 0)
+            throw std::runtime_error(
+                "Masked vector memory data/destination register cannot overlap v0");
 
         const auto predicate_mask = registers_.ReadVector(0);
         const auto lane_is_active = [&](size_t lane)

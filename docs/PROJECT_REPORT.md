@@ -142,10 +142,11 @@ validating `vmul.vv` and the dot-product example. CI #122 passed 349 tests,
 with one skipped and four disabled, validating `vmul.vx` and the SAXPY smoke
 test. CI #123 passed 351 tests, with one skipped and four disabled; the
 cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
-and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validates the timing-model baseline and its CLI smoke checks.
+and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validated the initial timing-model tests and CLI summary/help checks. CI #126 passed 364 tests, skipped one, disabled four, and had zero failures (18.15 seconds); it validated vector configuration/disassembly edge cases, timing input/overflow hardening and strict CLI argument checks.
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
-executed all six runnable assembly examples on RVSS (including bit-manipulation
-and strided-memory examples), asserted that the average example prints `2`, and
+executed all ten runnable assembly examples on RVSS (including bit-manipulation,
+strided-memory, multiplication and matrix/cross-product kernels), asserted that
+the average example prints `2`, and
 exercised the REPL `info` and `regs` commands by checking vector configuration
 and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).
 
@@ -193,16 +194,20 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
   listed above.
 - The abstract timing model does not integrate vector instructions into the
   five-stage pipeline variants and is not a cycle-accurate processor model.
+  The five-stage pipeline path currently tracks GPR/FPR state and hazards only;
+  safe vector support needs coordinated vector state, decode, execution,
+  writeback and dependency logic.
   An architecture audit found that pipeline registers and hazard detection
   currently track GPR/FPR state only; a correct vector pipeline extension needs
   coordinated vector state, decode, execution, writeback and hazard changes.
 
 ## 8. Stretch work and deferred items
 
-The project scope identifies bit-manipulation operations, strided memory,
-cycle-stepped execution/performance modeling, pipeline integration, and
-independent reference comparisons as stretch work. The selected bit-count,
-AND-NOT, and rotate subset has been implemented and CI-verified. The selected
-strided-memory subset has been implemented and CI-verified in run #73. Remaining
-bit-manipulation operations, indexed/segment memory, the cycle-stepped model,
-pipeline integration, and independent reference comparison remain deferred. The limitations above make those boundaries explicit.
+The project scope identified bit-manipulation operations, strided memory,
+performance modeling, pipeline integration, and independent reference
+comparisons as stretch work. The selected bit-count, AND-NOT, rotate, strided-
+memory, multiplication and composed-kernel subsets have been implemented and
+CI-verified. The abstract vector timing model is implemented and CI-verified.
+Remaining Zvbb operations, indexed/segment memory, integration into the
+five-stage pipeline, and independent reference comparison remain deferred.
+The limitations above make those boundaries explicit.

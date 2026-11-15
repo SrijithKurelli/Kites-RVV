@@ -1625,3 +1625,101 @@ TEST(VectorExtension, UnsupportedReductionStillTrapsWhenVlIsZero)
     EXPECT_EQ(vm.vector_vl_, 0u);
     EXPECT_THROW(vm.Step(), std::runtime_error);
 }
+
+
+TEST(VectorExtension, MaskedVectorDataOperandsCannotOverlapV0)
+{
+    const auto expectReserved = [](const std::string &vector_instruction)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 2);
+        vm.registers_.WriteVectorByte(0, 0, 0x03u);
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, 16\n" + vector_instruction + "\n"));
+        vm.Step();
+        EXPECT_THROW(vm.Step(), std::runtime_error) << vector_instruction;
+    };
+
+    expectReserved("vadd.vv v0, v2, v3, v0.t");
+    expectReserved("vadd.vv v1, v0, v3, v0.t");
+    expectReserved("vadd.vv v1, v2, v0, v0.t");
+    expectReserved("vmul.vv v1, v0, v3, v0.t");
+    expectReserved("vmul.vv v1, v2, v0, v0.t");
+}
+
+TEST(VectorExtension, MaskedMaskResultsAndScalarReductionsMayWriteV0)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 2);
+    vm.registers_.WriteVectorByte(0, 0, 0x03u);
+    writeElement(vm.registers_, 2, 0, 4, 4u);
+    writeElement(vm.registers_, 2, 1, 4, 5u);
+    writeElement(vm.registers_, 3, 0, 4, 4u);
+    writeElement(vm.registers_, 3, 1, 4, 6u);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vmseq.vv v0, v2, v3, v0.t\n"
+        "vredsum.vs v0, v2, v3, v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(vm.registers_.ReadVectorByte(0, 0), 0x01u);
+    vm.Step();
+    EXPECT_EQ(readElement(vm.registers_, 0, 0, 4), 8u);
+}
+
+TEST(VectorExtension, MaskedVcpopMayUseV0AsItsMaskSource)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 4);
+    vm.registers_.WriteVectorByte(0, 0, 0x0Bu);
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 0\n"
+        "vcpop.m x10, v0, v0.t\n"));
+    vm.Step();
+    vm.Step();
+    EXPECT_EQ(vm.registers_.ReadGpr(10), 3u);
+}
+
+TEST(VectorExtension, MaskedVectorMemoryCannotUseV0AsDataOrDestination)
+{
+    const auto expectReserved = [](const std::string &memory_instruction)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, 0x3000u);
+        vm.registers_.WriteGpr(7, 1u);
+        vm.registers_.WriteVectorByte(0, 0, 0x01u);
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x7, 16\n" + memory_instruction + "\n"));
+        vm.Step();
+        EXPECT_THROW(vm.Step(), std::runtime_error) << memory_instruction;
+    };
+
+    expectReserved("vle32.v v0, (x5), v0.t");
+    expectReserved("vse32.v v0, (x5), v0.t");
+}
+
+
+TEST(VectorExtension, UnmaskedVectorOperationsMayUseV0AsData)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 2);
+    writeElement(vm.registers_, 0, 0, 4, 2u);
+    writeElement(vm.registers_, 0, 1, 4, 3u);
+    writeElement(vm.registers_, 3, 0, 4, 4u);
+    writeElement(vm.registers_, 3, 1, 4, 5u);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vadd.vv v0, v0, v3\n"));
+    vm.Step();
+    vm.Step();
+
+    EXPECT_EQ(readElement(vm.registers_, 0, 0, 4), 6u);
+    EXPECT_EQ(readElement(vm.registers_, 0, 1, 4), 8u);
+}

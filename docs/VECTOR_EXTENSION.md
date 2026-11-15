@@ -48,6 +48,15 @@ When masked, only lanes with the corresponding `v0` predicate bit set execute;
 masked-off destination lanes remain unchanged. Elements beyond `vl` are preserved
 (tail-undisturbed).
 
+For masked instructions, `v0` is an implicit 1-bit predicate source. This subset
+enforces the RVV overlap constraints: an ordinary masked vector result cannot
+target `v0`, and an ordinary vector data source cannot also be `v0` because
+that would read one register with both EEW=1 (mask) and EEW=SEW (data). The
+exceptions are mask-producing comparisons (which may write `v0`), scalar-result
+reductions (which may write `v0`), and `vcpop.m` using `v0` as its mask-data
+source. Masked vector loads to `v0` and masked vector stores from `v0` are
+reserved and trap in this subset.
+
 Vector instructions use the standard 32-bit instruction word layout for the
 implemented encodings. The assembly operand order is `vd, vs2, vs1`.
 

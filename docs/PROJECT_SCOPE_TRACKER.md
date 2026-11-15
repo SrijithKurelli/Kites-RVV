@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (after successful CI run #125; vector configuration/timing-input audit pending)
+Last updated: 2026-11-16 (after successful CI run #126; masked-v0 legality audit pending)
 
 ## Must-have core scope
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-16 (after successful CI run #125; vector configuration/tim
 |---|---|---|
 | 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #70. |
 | SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
-| Vector configuration / AVL rules | Implemented for selected `vsetvli` forms; latest audit CI pending | `rs1=x0, rd=x0` preserves VL only when VLMAX is unchanged; increasing or reducing VLMAX is reserved. Disassembly preserves the full 11-bit `zimm` field. New regressions cover both VLMAX directions and high immediate bits. |
+| Vector configuration / AVL rules | Implemented and CI-verified | `rs1=x0, rd=x0` preserves VL only when VLMAX is unchanged; increasing or reducing VLMAX is reserved. Disassembly preserves the full 11-bit `zimm` field. CI #126 passed regressions for VLMAX increase, reduction, no-change and high immediate bits. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |
@@ -27,9 +27,9 @@ Last updated: 2026-11-16 (after successful CI run #125; vector configuration/tim
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #125 built the CLI and smoke-tested all ten vector examples; CI #119/#122/#123 separately exercised the dot-product, SAXPY, cross-product and 2x2 matrix kernels and their result tests. |
-| Scalar regression | Verified | CI #125 reports 100% tests passed with zero failures in 360 enabled tests: 359 passed and one skipped; four tests disabled (32.16 seconds). This includes existing scalar regressions. |
-| Scalar-vs-vector comparison | Implemented and CI-verified for instruction count; timing-model CI pending | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate timing tool adds assumption-driven estimated-cycle comparisons. |
-| Short design/validation/limitations report | Updated; timing-model validation pending | `docs/PROJECT_REPORT.md` now distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence and deferred pipeline/reference work. Final team review before submission remains advisable. |
+| Scalar regression | Verified | CI #126 reports 100% tests passed with zero failures in 365 non-disabled test cases: 364 passed and one skipped; four tests disabled (18.15 seconds). This includes existing scalar regressions. |
+| Scalar-vs-vector comparison | Implemented and CI-verified | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate abstract timing tool compares addition, dot product and 2x2 matrix kernels under configurable scheduling assumptions; CI #125/#126 validated its build, tests and CLI input checks. |
+| Short design/validation/limitations report | Updated; final masked-v0 validation pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, the abstract timing model and its assumptions, limitations, CI evidence, and deferred pipeline/reference work. Final team review before submission remains advisable. |
 
 ## Stretch scope
 
@@ -41,8 +41,9 @@ Last updated: 2026-11-16 (after successful CI run #125; vector configuration/tim
 | AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Partially implemented; CI-verified | Added `vlse8/16/32/64.v` and `vsse8/16/32/64.v` with signed byte strides, optional `v0.t`, bounds/overflow checks, and undo/redo support. CI #73 passed tests for encoding/disassembly, all SEWs, zero and negative stride, masking, and store preflight. Indexed and segment forms remain unsupported. |
 | Cross-product and 2x2 matrix kernels | Implemented and CI-verified | Cross product composes two `vmul.vv` operations and `vsub.vv`; 2x2 multiplication composes four multiply/reduction pairs. Independent tests assert `[-3,6,-3]` and `[[19,22],[43,50]]`; both tests passed CI #123. |
-| Abstract vector-unit timing model | Implemented and CI-verified; hardening pending | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, estimated cycles and lane utilisation. CI #125 passed the initial timing-model tests and CLI summary/help smoke checks. The current audit adds overflow checks and strict CLI argument validation. It is an abstract scheduler, not a cycle-accurate processor model. |
-| Execution traces and performance statistics | Implemented and smoke-tested; strict-input checks pending | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125 built the tool and passed summary/help smoke tests. |
+| Abstract vector-unit timing model | Implemented and CI-verified | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #126 passed timing overflow/parameter tests and strict CLI input smoke checks. It is an abstract scheduler, not a cycle-accurate processor model. |
+| Execution traces and performance statistics | Implemented and CI-verified | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125/#126 built the tool and passed summary, help and strict-input smoke checks. |
+| Masked `v0` overlap constraints | Implemented on branch; CI pending | Masked ordinary vector results/data cannot overlap the `v0` predicate register at a different EEW. Mask-producing comparisons, scalar-result reductions and `vcpop.m` mask-source use are explicit exceptions. Masked vector memory data/destination register `v0` is rejected. Four new regression tests cover reserved and permitted cases. |
 | Selected pipelined vector instructions | Deferred after architecture audit | The five-stage pipeline registers currently carry GPR/FPR values and controls only; the hazard detector tracks GPR/FPR dependencies. Correct vector support requires coordinated vector state, decode, execution, writeback and hazard-detection changes, not a local ALU case. |
 | Independent reference / Spike comparison | Not started | Compare supported assembled programs where reference tool/configuration is available. |
 
