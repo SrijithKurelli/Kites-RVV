@@ -1275,3 +1275,109 @@ TEST(VectorExtension, MaskedBitCountsPreserveInactiveAndTailElements)
     for (size_t byte = 3; byte < 16; ++byte)
         EXPECT_EQ(vm.registers_.ReadVectorByte(3, byte), 0xAAu);
 }
+
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
+{
+    const auto program = assembleVectorSource(
+        "vmul.vv v1, v2, v3\\n"
+        "vmul.vv v4, v5, v6, v0.t\\n"
+        "vmul.vx v7, v8, x9\\n"
+        "vmul.vx v10, v11, a0, v0.t\\n");
+
+    ASSERT_EQ(program.text_buffer.size(), 4u);
+    const uint32_t vmul_vv =
+        (0b100101u << 26) | (1u << 25) | (2u << 20) | (3u << 15) | (1u << 7) | 0x57u;
+    const uint32_t masked_vmul_vv =
+        (0b100101u << 26) | (5u << 20) | (6u << 15) | (4u << 7) | 0x57u;
+    const uint32_t vmul_vx =
+        (0b100101u << 26) | (1u << 25) | (8u << 20) | (9u << 15) |
+        (0b100u << 12) | (7u << 7) | 0x57u;
+    const uint32_t masked_vmul_vx =
+        (0b100101u << 26) | (11u << 20) | (10u << 15) |
+        (0b100u << 12) | (10u << 7) | 0x57u;
+
+    EXPECT_EQ(program.text_buffer[0], vmul_vv);
+    EXPECT_EQ(program.text_buffer[1], masked_vmul_vv);
+    EXPECT_EQ(program.text_buffer[2], vmul_vx);
+    EXPECT_EQ(program.text_buffer[3], masked_vmul_vx);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vmul.vv v1, v2, v3");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[2]),
+              "vmul.vx v7, v8, x9");
+}
+
+TEST(VectorExtension, VectorMultiplyExecutesForEverySupportedSEW)
+{
+    struct Case
+    {
+        int zimm;
+        size_t element_bytes;
+    };
+    const Case cases[] = {{0, 1}, {8, 2}, {16, 4}, {24, 8}};
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+        auto *registers = manager.getRegisterFile();
+        const size_t lanes = 16 / test_case.element_bytes;
+        const uint64_t element_mask = test_case.element_bytes == 8
+            ? UINT64_MAX
+            : ((uint64_t{1} << (test_case.element_bytes * 8)) - 1u);
+        constexpr uint64_t scalar = 7;
+
+        registers->WriteGpr(5, lanes);
+        registers->WriteGpr(6, scalar);
+        for (size_t lane = 0; lane < lanes; ++lane)
+        {
+            writeElement(*registers, 1, lane, test_case.element_bytes, lane + 2);
+            writeElement(*registers, 2, lane, test_case.element_bytes, lane + 3);
+        }
+
+        const std::string source =
+            "vsetvli x7, x5, " + std::to_string(test_case.zimm) + "\\n" +
+            "vmul.vv v3, v1, v2\\n"
+            "vmul.vx v4, v1, x6\\n";
+        manager.loadProgram(assembleVectorSource(source));
+        manager.step();
+        manager.step();
+        manager.step();
+
+        for (size_t lane = 0; lane < lanes; ++lane)
+        {
+            const uint64_t a = lane + 2;
+            const uint64_t b = lane + 3;
+            EXPECT_EQ(readElement(*registers, 3, lane, test_case.element_bytes),
+                      (a * b) & element_mask);
+            EXPECT_EQ(readElement(*registers, 4, lane, test_case.element_bytes),
+                      (a * scalar) & element_mask);
+        }
+    }
+}
+
+TEST(VectorExtension, MaskedVectorMultiplyPreservesInactiveLanes)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+
+    writeElement(*registers, 0, 0, 1, 0b0101);
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(*registers, 1, lane, 4, lane + 2);
+        writeElement(*registers, 2, lane, 4, 10);
+        writeElement(*registers, 3, lane, 4, 99);
+    }
+
+    manager.getRegisterFile()->WriteGpr(5, 4);
+    manager.loadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\\n"
+        "vmul.vv v3, v1, v2, v0.t\\n"));
+    manager.step();
+    manager.step();
+
+    EXPECT_EQ(readElement(*registers, 3, 0, 4), 20u);
+    EXPECT_EQ(readElement(*registers, 3, 1, 4), 99u);
+    EXPECT_EQ(readElement(*registers, 3, 2, 4), 40u);
+    EXPECT_EQ(readElement(*registers, 3, 3, 4), 99u);
+}
