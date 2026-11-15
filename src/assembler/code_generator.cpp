@@ -27,6 +27,10 @@ printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCo
         {
             if (block.getOpcode() == "vsetvli")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1() + ", " + block.getImm();
+            else if (block.getOpcode() == "vmv.x.s")
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
+            else if (block.getOpcode() == "vmv.s.x")
+                code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
             else if (block.getOpcode() == "vcpop.m")
                 code = block.getOpcode() + " " + block.getRd() + ", " + block.getRs1();
             else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
