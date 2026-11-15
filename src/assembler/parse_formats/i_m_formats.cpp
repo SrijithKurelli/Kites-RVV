@@ -676,6 +676,28 @@ bool Parser::parse_O_VEC_C_VEC_C_I()
     return true;
 }
 
+bool Parser::parse_O_VEC_C_GPR()
+{
+    const unsigned int line = currentToken().line_number;
+    if (peekToken(1).line_number != line || peekToken(1).type != TokenType::VEC_REGISTER ||
+        peekToken(2).line_number != line || peekToken(2).type != TokenType::COMMA ||
+        peekToken(3).line_number != line || peekToken(3).type != TokenType::GP_REGISTER ||
+        (peekToken(4).type != TokenType::EOF_ && peekToken(4).line_number == line))
+        return false;
+
+    ICUnit block;
+    block.setOpcode(currentToken().value);
+    block.setLineNumber(line);
+    block.setInstructionIndex(instruction_index_);
+    block.setRd(peekToken(1).value);
+    block.setRs1(reg_alias_to_name.at(peekToken(3).value));
+    skipCurrentLine();
+    intermediate_code_.emplace_back(block, true);
+    instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+    ++instruction_index_;
+    return true;
+}
+
 bool Parser::parse_O_VEC_C_VEC()
 {
     const unsigned int line = currentToken().line_number;
