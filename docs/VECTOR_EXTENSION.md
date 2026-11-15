@@ -181,6 +181,9 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_average_selected.s` — masked sum, population count, zero-count guard, and integer average.
 - `vector_bitmanip.s` — selected vector AND-NOT, rotate, leading/trailing-zero, and population-count operations.
 - `vector_strided_memory.s` — positive-stride SEW=32 load/store, selecting every second word.
+- `vector_dot_product.s` — vector multiply followed by sum reduction.
+- `vector_cross_product.s` — a three-lane cross-product kernel using multiply and subtract.
+- `vector_matrix_multiply_2x2.s` — four row/column dot products for a 2x2 matrix product.
 
 See `examples/vector/README.md` for commands and expected results.
 
