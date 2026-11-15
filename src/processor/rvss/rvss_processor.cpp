@@ -556,6 +556,52 @@ void RVSSProcessor::ExecuteVector()
     const bool vm = ((current_instruction_ >> 25) & 1u) != 0;
     const uint8_t vs2 = (current_instruction_ >> 20) & 0x1F;
     const uint8_t vs1 = rs1;
+
+    // vmv.x.s: extract element zero from a vector register into a GPR.
+    // The instruction is unmasked and remains defined even when vl is zero.
+    if (funct6 == 0b010000 && funct3 == 0b010 && vm && vs1 == 0)
+    {
+        const auto source = registers_.ReadVector(vs2);
+        const size_t bytes = vector_sew_ / 8;
+        uint64_t value = 0;
+        for (size_t byte = 0; byte < bytes; ++byte)
+            value |= static_cast<uint64_t>(source[byte]) << (8 * byte);
+        if (vector_sew_ < 64 && ((value >> (vector_sew_ - 1)) & 1u))
+            value |= (~uint64_t{0}) << vector_sew_;
+        if (vd != 0)
+        {
+            const uint64_t old_value = registers_.ReadGpr(vd);
+            registers_.WriteGpr(vd, value);
+            const uint64_t new_value = registers_.ReadGpr(vd);
+            if (old_value != new_value)
+                current_delta_.register_changes.push_back({vd, 0, old_value, new_value});
+        }
+        return;
+    }
+
+    // vmv.s.x: copy a scalar GPR into vector element zero. No operation
+    // occurs when vl=0; all other destination elements remain undisturbed.
+    if (funct6 == 0b010000 && funct3 == 0b110 && vm && vs2 == 0)
+    {
+        if (vector_vl_ == 0)
+            return;
+        const auto old_destination = registers_.ReadVector(vd);
+        auto result = old_destination;
+        const uint64_t scalar = registers_.ReadGpr(vs1);
+        const size_t bytes = vector_sew_ / 8;
+        for (size_t byte = 0; byte < bytes; ++byte)
+            result[byte] = static_cast<uint8_t>((scalar >> (8 * byte)) & 0xFFu);
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
     const auto predicate_mask = registers_.ReadVector(0);
     const auto lane_is_active = [&](size_t lane)
     {
