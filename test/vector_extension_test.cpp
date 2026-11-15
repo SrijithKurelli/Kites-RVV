@@ -1528,3 +1528,35 @@ TEST(VectorExtension, ScalarVectorMoveSemanticsWhenVectorLengthIsZero)
     EXPECT_EQ(registers->ReadGpr(8), static_cast<uint64_t>(-1));
     EXPECT_EQ(registers->ReadVectorByte(2, 0), 0x34u);
 }
+
+TEST(VectorExtension, VsetivliAssemblerEncodingAndDisassembly)
+{
+    const auto program = assembleVectorSource("vsetivli a0, 5, 16\n");
+    ASSERT_EQ(program.text_buffer.size(), 1u);
+    const uint32_t expected =
+        (0b11u << 30) | (16u << 20) | (5u << 15) |
+        (0b111u << 12) | (10u << 7) | 0x57u;
+    EXPECT_EQ(program.text_buffer[0], expected);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vsetivli x10, 5, 16");
+}
+
+TEST(VectorExtension, VsetivliComputesVLForEverySupportedSEW)
+{
+    struct Case
+    {
+        int vtypei;
+        uint64_t expected_vl;
+    };
+    const Case cases[] = {{0, 5}, {8, 5}, {16, 4}, {24, 2}, {0xD0, 4}};
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+        manager.loadProgram(assembleVectorSource(
+            "vsetivli x7, 5, " + std::to_string(test_case.vtypei) + "\n"));
+        manager.step();
+        EXPECT_EQ(manager.getRegisterFile()->ReadGpr(7), test_case.expected_vl);
+    }
+}
