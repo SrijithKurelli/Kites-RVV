@@ -102,7 +102,7 @@ TEST(VectorTimingModel, RejectsInvalidLaneConfiguration)
 {
     TimingConfig config;
     config.lanes = 0;
-    EXPECT_THROW(VectorTimingModel(config), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(VectorTimingModel{config}), std::invalid_argument);
 }
 
 TEST(VectorTimingModel, EmptyProgramHasZeroCyclesAndNoLaneUtilisation)
