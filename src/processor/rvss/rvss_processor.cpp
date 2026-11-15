@@ -1601,6 +1601,21 @@ void RVSSProcessor::WriteBackCsr()
     uint64_t old_gpr = registers_.ReadGpr(rd);
     uint64_t old_csr = registers_.ReadCsr(csr_target_address_);
 
+    const bool csr_write_attempt =
+        funct3 == 0b001 || funct3 == 0b101 ||
+        ((funct3 == 0b010 || funct3 == 0b011) && csr_write_val_ != 0) ||
+        ((funct3 == 0b110 || funct3 == 0b111) && csr_uimm_ != 0);
+    if (csr_target_address_ == 0xC20 || csr_target_address_ == 0xC21 ||
+        csr_target_address_ == 0xC22)
+    {
+        if (csr_write_attempt)
+            throw std::runtime_error("Attempt to write a read-only vector CSR");
+    }
+
+    const uint64_t old_vxsat = registers_.ReadCsr(0x009);
+    const uint64_t old_vxrm = registers_.ReadCsr(0x00A);
+    const uint64_t old_vcsr = registers_.ReadCsr(0x00F);
+
     switch (funct3)
     {
     case 0b001:
@@ -1652,6 +1667,36 @@ void RVSSProcessor::WriteBackCsr()
         break;
     }
     }
+
+    // vcsr is the architectural packed view of vxsat and vxrm.
+    if (csr_target_address_ == 0x00F)
+    {
+        const uint64_t packed = registers_.ReadCsr(0x00F) & 0x7u;
+        registers_.WriteCsr(0x009, packed & 0x1u);
+        registers_.WriteCsr(0x00A, (packed >> 1) & 0x3u);
+    }
+    else if (csr_target_address_ == 0x009)
+    {
+        const uint64_t packed = (registers_.ReadCsr(0x00F) & 0x6u) |
+                                (registers_.ReadCsr(0x009) & 0x1u);
+        registers_.WriteCsr(0x00F, packed);
+    }
+    else if (csr_target_address_ == 0x00A)
+    {
+        const uint64_t packed = (registers_.ReadCsr(0x00F) & 0x1u) |
+                                ((registers_.ReadCsr(0x00A) & 0x3u) << 1);
+        registers_.WriteCsr(0x00F, packed);
+    }
+
+    const uint64_t new_vxsat = registers_.ReadCsr(0x009);
+    const uint64_t new_vxrm = registers_.ReadCsr(0x00A);
+    const uint64_t new_vcsr = registers_.ReadCsr(0x00F);
+    if (old_vxsat != new_vxsat)
+        current_delta_.register_changes.push_back({0x009, 1, old_vxsat, new_vxsat});
+    if (old_vxrm != new_vxrm)
+        current_delta_.register_changes.push_back({0x00A, 1, old_vxrm, new_vxrm});
+    if (old_vcsr != new_vcsr && csr_target_address_ != 0x00F)
+        current_delta_.register_changes.push_back({0x00F, 1, old_vcsr, new_vcsr});
 
     uint64_t new_gpr = registers_.ReadGpr(rd);
     uint64_t new_csr = registers_.ReadCsr(csr_target_address_);
