@@ -29,6 +29,12 @@ Expected results:
 | `vector_cross_product.s` | Cross product of `(1, 2, 3)` and `(4, 5, 6)`; stores and prints `(-3, 6, -3)`. |
 | `vector_matrix_multiply_2x2.s` | Multiplies `[[1,2],[3,4]]` by `[[5,6],[7,8]]`; stores and prints `[[19,22],[43,50]]`. |
 
+The multiply examples use `vmul.vv` or `vmul.vx`, whose results retain the low SEW bits.
+The dot product combines vector multiplication with `vredsum.vs`; the cross product
+uses two vector multiplications followed by `vsub.vv`; matrix multiplication repeats
+vector dot products for each row/column pair. These are assembly kernels, not custom
+matrix or cross-product opcodes.
+
 The average example uses a signed scalar `div`, which truncates toward zero.
 When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3.
 These programs exercise the implemented subset, not general RVV 1.0 programs.
