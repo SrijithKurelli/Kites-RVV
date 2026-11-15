@@ -716,8 +716,13 @@ void RVSSProcessor::ExecuteVector()
   // Comparison Instructions
     
     const bool vector_scalar_multiply = funct3 == 0b100 && funct6 == 0b100101;
-    if (funct3 != 0b000 && !vector_scalar_multiply)
-        throw std::runtime_error("Unsupported vector operand format; this subset supports OPIVV and vmul.vx");
+    const bool vector_scalar_add = funct3 == 0b100 && funct6 == 0b000000;
+    const bool vector_immediate_add = funct3 == 0b011 && funct6 == 0b000000;
+    const bool scalar_or_immediate_form =
+        vector_scalar_multiply || vector_scalar_add || vector_immediate_add;
+    if (funct3 != 0b000 && !scalar_or_immediate_form)
+        throw std::runtime_error(
+            "Unsupported vector operand format; this subset supports OPIVV, vadd.vx, vadd.vi, and vmul.vx");
 
     const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
     const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000001 ||
@@ -729,9 +734,13 @@ void RVSSProcessor::ExecuteVector()
 
     const auto lhs = registers_.ReadVector(vs2);
     std::array<uint8_t, 16> rhs{};
-    if (!vector_scalar_multiply)
+    if (!scalar_or_immediate_form)
         rhs = registers_.ReadVector(vs1);
     const uint64_t scalar_operand = registers_.ReadGpr(vs1) & element_mask;
+    const int64_t signed_immediate = (vs1 & 0x10u)
+        ? static_cast<int64_t>(vs1) - 32
+        : static_cast<int64_t>(vs1);
+    const uint64_t immediate_operand = static_cast<uint64_t>(signed_immediate) & element_mask;
     auto result = registers_.ReadVector(vd);
     const auto old_destination = result;
     for (size_t lane = 0; lane < vector_vl_; ++lane)
@@ -739,7 +748,9 @@ void RVSSProcessor::ExecuteVector()
         if (!lane_is_active(lane))
             continue;
         const uint64_t a = readElement(lhs, lane);
-        const uint64_t b = vector_scalar_multiply ? scalar_operand : readElement(rhs, lane);
+        const uint64_t b = vector_scalar_multiply || vector_scalar_add
+            ? scalar_operand
+            : vector_immediate_add ? immediate_operand : readElement(rhs, lane);
         if (comparison)
         {
             bool predicate = false;
