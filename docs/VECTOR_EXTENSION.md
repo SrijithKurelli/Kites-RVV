@@ -36,7 +36,17 @@ For this subset, the architectural AVL special cases are implemented:
 
 When `rd` is not `x0`, the selected `vl` is written to `x[rd]`.
 
-### `vadd.vv vd, vs2, vs1` and `vsub.vv vd, vs2, vs1`
+### Integer arithmetic
+
+Supported forms are:
+
+- `vadd.vv vd, vs2, vs1` — vector plus vector.
+- `vadd.vx vd, vs2, rs1` — vector plus scalar GPR.
+- `vadd.vi vd, vs2, imm` — vector plus signed five-bit immediate (`-16..15`).
+- `vsub.vv vd, vs2, vs1` — vector minus vector.
+
+All forms accept an optional trailing `, v0.t` mask operand.
+
 
 These operations use the current `SEW` and operate on the first `vl` elements.
 Addition, subtraction, and multiplication wrap modulo the element width. The
