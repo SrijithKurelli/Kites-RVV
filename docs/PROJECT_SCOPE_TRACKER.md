@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (CI #129 passed; immediate-AVL negative cases and end-to-end checks added)
+Last updated: 2026-11-16 (CI #130 passed; Spike reference workflow added, validation pending)
 
 ## Must-have core scope
 
@@ -27,7 +27,7 @@ Last updated: 2026-11-16 (CI #129 passed; immediate-AVL negative cases and end-t
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #125 built the CLI and smoke-tested all ten vector examples; CI #119/#122/#123 separately exercised the dot-product, SAXPY, cross-product and 2x2 matrix kernels and their result tests. |
-| Scalar regression | Verified | CI #129 reports 100% tests passed with zero failures in 378 non-disabled test cases: 377 passed and one skipped; four tests disabled (39.57 seconds). This includes existing scalar regressions. |
+| Scalar regression | Verified | CI #130 reports 100% tests passed with zero failures in 381 non-disabled test cases: 380 passed and one skipped; four tests disabled (18.69 seconds). This includes existing scalar regressions. |
 | Scalar-vs-vector comparison | Implemented and CI-verified | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate abstract timing tool compares addition, dot product and 2x2 matrix kernels under configurable scheduling assumptions; CI #125/#126 validated its build, tests and CLI input checks. |
 | Short design/validation/limitations report | Updated; final architecture/reference review pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence, and deferred pipeline/reference work. CI #127 validated masked-`v0` constraints; final team review before submission remains advisable. |
 
@@ -44,7 +44,7 @@ Last updated: 2026-11-16 (CI #129 passed; immediate-AVL negative cases and end-t
 | Abstract vector-unit timing model | Implemented and CI-verified; extra cycle-overflow tests pending | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #126 passed lane-slot overflow/parameter tests and strict CLI input checks. Additional uint64 latency/completion/issue-overflow regressions are staged for CI #128. It is an abstract scheduler, not a cycle-accurate processor model. |
 | Execution traces and performance statistics | Implemented and CI-verified | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125/#126 built the tool and passed summary, help and strict-input smoke checks. |
 | Selected pipelined vector instructions | Deferred after architecture audit | The five-stage pipeline registers currently carry GPR/FPR values and controls only; the hazard detector tracks GPR/FPR dependencies. Correct vector support requires coordinated vector state, decode, execution, writeback and hazard-detection changes, not a local ALU case. |
-| Independent reference / Spike comparison | Not started | Compare supported assembled programs where reference tool/configuration is available. |
+| Independent reference / Spike comparison | Implemented on branch; CI pending | New optional workflow builds pinned Spike 1.1.0 and the Ubuntu RISC-V cross-toolchain, then independently assembles and executes vsetivli, vmul.vv, vmul.vx, vredsum.vs, vector loads/stores and checks GPR results against the Kites golden values. Focused semantic cross-check, not complete RVV conformance. |
 
 ## Additional hardening beyond the stated scope
 
