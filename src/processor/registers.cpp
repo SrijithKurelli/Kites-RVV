@@ -231,6 +231,8 @@ const std::unordered_map<std::string, std::string> reg_alias_to_name = {
     {"f30", "f30"},       {"f31", "f31"},
 
     {"fflags", "fflags"}, {"frm", "frm"},  {"fcsr", "fcsr"},
+    {"vstart", "vstart"}, {"vxsat", "vxsat"}, {"vxrm", "vxrm"},
+    {"vcsr", "vcsr"}, {"vl", "vl"}, {"vtype", "vtype"}, {"vlenb", "vlenb"},
 
 };
 
