@@ -10,6 +10,9 @@ root after building `kites-cli`:
 ./build/kites-cli examples/vector/vector_average_selected.s --vm rvss
 ./build/kites-cli examples/vector/vector_bitmanip.s --vm rvss
 ./build/kites-cli examples/vector/vector_strided_memory.s --vm rvss
+./build/kites-cli examples/vector/vector_dot_product.s --vm rvss
+./build/kites-cli examples/vector/vector_cross_product.s --vm rvss
+./build/kites-cli examples/vector/vector_matrix_multiply_2x2.s --vm rvss
 ```
 
 Expected results:
