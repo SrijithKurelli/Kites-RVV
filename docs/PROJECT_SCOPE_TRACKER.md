@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (after successful CI run #126; masked-v0 legality audit pending)
+Last updated: 2026-11-16 (CI #127 passed; VMUL golden and timing-cycle-overflow checks pending)
 
 ## Must-have core scope
 
@@ -27,9 +27,9 @@ Last updated: 2026-11-16 (after successful CI run #126; masked-v0 legality audit
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
 | Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #125 built the CLI and smoke-tested all ten vector examples; CI #119/#122/#123 separately exercised the dot-product, SAXPY, cross-product and 2x2 matrix kernels and their result tests. |
-| Scalar regression | Verified | CI #126 reports 100% tests passed with zero failures in 365 non-disabled test cases: 364 passed and one skipped; four tests disabled (18.15 seconds). This includes existing scalar regressions. |
+| Scalar regression | Verified | CI #127 reports 100% tests passed with zero failures in 370 non-disabled test cases: 369 passed and one skipped; four tests disabled (20.53 seconds). This includes existing scalar regressions. |
 | Scalar-vs-vector comparison | Implemented and CI-verified | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate abstract timing tool compares addition, dot product and 2x2 matrix kernels under configurable scheduling assumptions; CI #125/#126 validated its build, tests and CLI input checks. |
-| Short design/validation/limitations report | Updated; final masked-v0 validation pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, the abstract timing model and its assumptions, limitations, CI evidence, and deferred pipeline/reference work. Final team review before submission remains advisable. |
+| Short design/validation/limitations report | Updated; final encoding/timing validation pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence, and deferred pipeline/reference work. CI #127 validated masked-`v0` constraints; final team review before submission remains advisable. |
 
 ## Stretch scope
 
@@ -41,9 +41,8 @@ Last updated: 2026-11-16 (after successful CI run #126; masked-v0 legality audit
 | AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Partially implemented; CI-verified | Added `vlse8/16/32/64.v` and `vsse8/16/32/64.v` with signed byte strides, optional `v0.t`, bounds/overflow checks, and undo/redo support. CI #73 passed tests for encoding/disassembly, all SEWs, zero and negative stride, masking, and store preflight. Indexed and segment forms remain unsupported. |
 | Cross-product and 2x2 matrix kernels | Implemented and CI-verified | Cross product composes two `vmul.vv` operations and `vsub.vv`; 2x2 multiplication composes four multiply/reduction pairs. Independent tests assert `[-3,6,-3]` and `[[19,22],[43,50]]`; both tests passed CI #123. |
-| Abstract vector-unit timing model | Implemented and CI-verified | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #126 passed timing overflow/parameter tests and strict CLI input smoke checks. It is an abstract scheduler, not a cycle-accurate processor model. |
+| Abstract vector-unit timing model | Implemented and CI-verified; extra cycle-overflow tests pending | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #126 passed lane-slot overflow/parameter tests and strict CLI input checks. Additional uint64 latency/completion/issue-overflow regressions are staged for CI #128. It is an abstract scheduler, not a cycle-accurate processor model. |
 | Execution traces and performance statistics | Implemented and CI-verified | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125/#126 built the tool and passed summary, help and strict-input smoke checks. |
-| Masked `v0` overlap constraints | Implemented on branch; CI pending | Masked ordinary vector results/data cannot overlap the `v0` predicate register at a different EEW. Mask-producing comparisons, scalar-result reductions and `vcpop.m` mask-source use are explicit exceptions. Masked vector memory data/destination register `v0` is rejected. Four new regression tests cover reserved and permitted cases. |
 | Selected pipelined vector instructions | Deferred after architecture audit | The five-stage pipeline registers currently carry GPR/FPR values and controls only; the hazard detector tracks GPR/FPR dependencies. Correct vector support requires coordinated vector state, decode, execution, writeback and hazard-detection changes, not a local ALU case. |
 | Independent reference / Spike comparison | Not started | Compare supported assembled programs where reference tool/configuration is available. |
 
@@ -54,6 +53,8 @@ Last updated: 2026-11-16 (after successful CI run #126; masked-v0 legality audit
 | Cross-platform test runner (`windows.h` guard) | Implemented | Allows Linux CI to compile the existing test suite. |
 | Double-precision FMA instruction classification fix | Implemented; latest CI run passed the existing FMA tests | Upstream classifier omitted D-format FMA opcodes, causing existing double-FMA tests to fail. |
 | Continuous Qt 6.9.2 Linux build/test workflow | Implemented | Gives repeatable compile and regression feedback. |
+| Masked `v0` overlap constraints | Implemented and CI-verified | Masked ordinary vector results/data cannot overlap the `v0` predicate register at a different EEW. Mask-producing comparisons, scalar-result reductions and `vcpop.m` mask-source use are explicit exceptions. Masked vector memory data/destination register `v0` is rejected. All five reserved/permitted/unmasked regression tests passed CI #127. |
+| VMUL independent golden encodings | Added on branch; CI #128 pending | Literal machine words for masked and unmasked `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX) supplement the formula-based assembler checks; values were cross-checked against upstream `riscv-opcodes` and LLVM MC tests. |
 
 ## Current implementation boundaries
 

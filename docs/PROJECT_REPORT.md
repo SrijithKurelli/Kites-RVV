@@ -133,6 +133,10 @@ positive `5 / 2 = 2`, negative `-5 / 2 = -2`, truncation toward zero, and an
 explicit zero-count branch. The selected bit-manipulation tests cover assembler
 encoding/disassembly, per-element bit counts and AND-NOT/rotates for every
 supported SEW, plus masked bit-count preservation of inactive and tail elements.
+VMUL assembly tests also include literal golden machine words for masked
+and unmasked OPMVV/OPMVX encodings. The field definitions were cross-checked
+against [riscv-opcodes](https://github.com/riscv/riscv-opcodes/blob/master/extensions/rv_v)
+and the [LLVM RISC-V vector MC tests](https://github.com/llvm/llvm-project/blob/main/llvm/test/MC/RISCV/rvv/mul.s).
 Strided-memory tests cover encoding/disassembly, all SEWs, zero stride, negative
 stride with masking, and active-lane store preflight; all five passed in CI run #73.
 CI run #73 (commit `aa963b9`) reports 100% tests passed with 0 failures out of
@@ -142,7 +146,7 @@ validating `vmul.vv` and the dot-product example. CI #122 passed 349 tests,
 with one skipped and four disabled, validating `vmul.vx` and the SAXPY smoke
 test. CI #123 passed 351 tests, with one skipped and four disabled; the
 cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
-and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validated the initial timing-model tests and CLI summary/help checks. CI #126 passed 364 tests, skipped one, disabled four, and had zero failures (18.15 seconds); it validated vector configuration/disassembly edge cases, timing input/overflow hardening and strict CLI argument checks.
+and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validated the initial timing-model tests and CLI summary/help checks. CI #126 passed 364 tests, skipped one, disabled four, and had zero failures (18.15 seconds); it validated vector configuration/disassembly edge cases, timing input/overflow hardening and strict CLI argument checks. CI #127 passed 369 tests, skipped one and disabled four with zero failures (20.53 seconds); all five masked-`v0` overlap, exception and unmasked-use regression tests passed. The clean build and ten-example/timing-CLI smoke checks also passed.
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 executed all ten runnable assembly examples on RVSS (including bit-manipulation,
 strided-memory, multiplication and matrix/cross-product kernels), asserted that
@@ -184,8 +188,12 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 - `vsetivli`, `vsetvl`, other vector configuration encodings, and official
   vector CSRs are not implemented.
 - Tail and masked-off destination elements follow the undisturbed behavior
-  implemented by this subset. Full RVV agnostic policies, register groups,
-  and illegal group-overlap rules are outside the implementation boundary.
+  implemented by this subset. Masked operations treat `v0` as the implicit
+  EEW=1 predicate source: ordinary data sources and ordinary vector destinations
+  cannot overlap it. Mask-producing comparisons and scalar-result reductions may
+  write `v0`; `vcpop.m` may use `v0` as its mask-data source. Masked vector loads
+  into and stores from `v0` are reserved. Full RVV agnostic policies, register
+  groups, and other overlap constraints outside this subset remain unimplemented.
 - Vector floating-point, fixed-point, widening/narrowing, and permutation
   operations are not implemented. Only the selected bit-manipulation subset
   described above is present; the remaining Zvbb operations are not implemented.

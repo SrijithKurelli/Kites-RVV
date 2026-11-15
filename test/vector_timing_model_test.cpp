@@ -202,3 +202,56 @@ TEST(VectorTimingModel, RejectsAccumulatedLaneSlotOverflow)
     };
     EXPECT_THROW(model.simulate(program), std::overflow_error);
 }
+
+
+TEST(VectorTimingModel, RejectsVectorLatencyAdditionOverflow)
+{
+    TimingConfig config;
+    config.lanes = 1;
+    config.vector_startup_latency_cycles = std::numeric_limits<std::uint64_t>::max();
+    config.vector_group_latency_cycles = 1;
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"vadd.vv", TimingOpKind::VectorALU, "v3", {"v1", "v2"}, 1},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
+}
+
+TEST(VectorTimingModel, RejectsLaneGroupLatencyMultiplicationOverflow)
+{
+    TimingConfig config;
+    config.lanes = 1;
+    config.vector_startup_latency_cycles = 0;
+    config.vector_group_latency_cycles =
+        std::numeric_limits<std::uint64_t>::max() / 2 + 1;
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"vadd.vv", TimingOpKind::VectorALU, "v3", {"v1", "v2"}, 2},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
+}
+
+TEST(VectorTimingModel, RejectsCompletionCycleOverflow)
+{
+    TimingConfig config;
+    config.scalar_latency_cycles = std::numeric_limits<std::uint64_t>::max();
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"add", TimingOpKind::ScalarALU, "x1", {}},
+        {"add", TimingOpKind::ScalarALU, "x2", {}},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
+}
+
+TEST(VectorTimingModel, RejectsIssueIntervalCompletionOverflow)
+{
+    TimingConfig config;
+    config.issue_interval_cycles = std::numeric_limits<std::uint64_t>::max();
+    config.scalar_latency_cycles = 1;
+    const VectorTimingModel model(config);
+    const std::vector<TimingInstruction> program = {
+        {"add", TimingOpKind::ScalarALU, "x1", {}},
+        {"add", TimingOpKind::ScalarALU, "x2", {}},
+    };
+    EXPECT_THROW(model.simulate(program), std::overflow_error);
+}

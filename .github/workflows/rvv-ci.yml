@@ -93,6 +93,7 @@ jobs:
           grep -Fq 'memory stall cycles:' <<< "$timing_output"
           timing_help="$(./build/ci/kites-vector-timing --help)"
           grep -Fq 'Usage: kites-vector-timing' <<< "$timing_help"
+          ./build/ci/kites-vector-timing --startup 0 --reduction-extra 0 --memory-delay 0 --no-trace >/dev/null
 
           if ./build/ci/kites-vector-timing --lanes 0 --no-trace >/dev/null 2>&1; then
             echo "kites-vector-timing incorrectly accepted --lanes 0"
@@ -104,6 +105,27 @@ jobs:
           fi
           if ./build/ci/kites-vector-timing --lanes 4junk --no-trace >/dev/null 2>&1; then
             echo "kites-vector-timing incorrectly accepted a partially parsed lane count"
+            exit 1
+          fi
+
+          if ./build/ci/kites-vector-timing --vector-group 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero vector-group latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --scalar-latency 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero scalar latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --memory-latency 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero memory latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --issue-interval 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero issue interval"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --reduction-extra -1 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a negative reduction overhead"
             exit 1
           fi
 

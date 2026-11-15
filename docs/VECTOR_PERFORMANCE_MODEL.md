@@ -138,8 +138,10 @@ example:
 
 Unit tests cover lane-group rounding and utilisation, read-after-write stalls,
 serialized memory stalls, lane-count sensitivity, invalid lane/latency
-configurations, zero-valued optional latencies, per-operation and accumulated
-counter overflow, and empty programs. CI also checks that the CLI rejects
+configurations, zero-valued optional latencies, per-operation/accumulated lane
+counter overflow, and empty programs. Additional tests for uint64 vector-latency
+addition, lane-group multiplication, completion-cycle and issue-interval
+completion overflow are being added. CI also checks that the CLI rejects
 negative, partially parsed and invalid zero-valued arguments.
 
 The scalar/vector comparisons are estimates from this model's stated

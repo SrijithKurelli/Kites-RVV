@@ -1646,6 +1646,8 @@ TEST(VectorExtension, MaskedVectorDataOperandsCannotOverlapV0)
     expectReserved("vadd.vv v1, v2, v0, v0.t");
     expectReserved("vmul.vv v1, v0, v3, v0.t");
     expectReserved("vmul.vv v1, v2, v0, v0.t");
+    expectReserved("vmul.vx v1, v0, x8, v0.t");
+    expectReserved("vmul.vx v0, v2, x8, v0.t");
 }
 
 TEST(VectorExtension, MaskedMaskResultsAndScalarReductionsMayWriteV0)
@@ -1722,4 +1724,21 @@ TEST(VectorExtension, UnmaskedVectorOperationsMayUseV0AsData)
 
     EXPECT_EQ(readElement(vm.registers_, 0, 0, 4), 6u);
     EXPECT_EQ(readElement(vm.registers_, 0, 1, 4), 8u);
+}
+
+
+TEST(VectorExtension, VectorMultiplyEncodingsMatchGoldenWords)
+{
+    const auto program = assembleVectorSource(
+        "vmul.vv v7, v8, v9\n"
+        "vmul.vv v10, v11, v12, v0.t\n"
+        "vmul.vx v7, v8, a0\n"
+        "vmul.vx v10, v11, a2, v0.t\n");
+    ASSERT_EQ(program.text_buffer.size(), 4u);
+
+    // Golden 32-bit instruction words from the OPMVV/OPMVX field layouts.
+    EXPECT_EQ(program.text_buffer[0], 0x9684A3D7u);
+    EXPECT_EQ(program.text_buffer[1], 0x94B62557u);
+    EXPECT_EQ(program.text_buffer[2], 0x968563D7u);
+    EXPECT_EQ(program.text_buffer[3], 0x94B66557u);
 }
