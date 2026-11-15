@@ -376,7 +376,7 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
+    "vsetvli", "vsetivli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -942,6 +942,7 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"fsd", {SyntaxType::O_FPR_C_I_LP_GPR_RP}},
 
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_VTYPEI}},
+    {"vsetivli", {SyntaxType::O_GPR_C_I_C_VTYPEI}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vadd.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
     {"vadd.vi", {SyntaxType::O_VEC_C_VEC_C_I}},
@@ -1151,7 +1152,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
+        "vsetvli", "vsetivli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
