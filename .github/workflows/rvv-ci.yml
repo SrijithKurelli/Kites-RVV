@@ -77,6 +77,16 @@ jobs:
             printf '%s\n' "$output"
             if [[ "$example" == *vector_average_selected.s ]]; then
               grep -Fq '[Syscall output: 2]' <<< "$output"
+            elif [[ "$example" == *vector_dot_product.s ]]; then
+              grep -Fq '[Syscall output: 70]' <<< "$output"
+            elif [[ "$example" == *vector_cross_product.s ]]; then
+              grep -Fq '[Syscall output: -3]' <<< "$output"
+              grep -Fq '[Syscall output: 6]' <<< "$output"
+            elif [[ "$example" == *vector_matrix_multiply_2x2.s ]]; then
+              grep -Fq '[Syscall output: 19]' <<< "$output"
+              grep -Fq '[Syscall output: 22]' <<< "$output"
+              grep -Fq '[Syscall output: 43]' <<< "$output"
+              grep -Fq '[Syscall output: 50]' <<< "$output"
             fi
             echo "::endgroup::"
           done
