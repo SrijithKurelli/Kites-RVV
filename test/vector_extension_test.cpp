@@ -1381,3 +1381,33 @@ TEST(VectorExtension, MaskedVectorMultiplyPreservesInactiveLanes)
     EXPECT_EQ(readElement(*registers, 3, 2, 4), 40u);
     EXPECT_EQ(readElement(*registers, 3, 3, 4), 99u);
 }
+
+TEST(VectorExtension, DotProductComposesVectorMultiplyAndReduction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+
+    const uint32_t lhs[] = {1, 2, 3, 4};
+    const uint32_t rhs[] = {5, 6, 7, 8};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(*registers, 1, lane, 4, lhs[lane]);
+        writeElement(*registers, 2, lane, 4, rhs[lane]);
+    }
+
+    manager.getRegisterFile()->WriteGpr(5, 4);
+    manager.loadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\\n"
+        "vmul.vv v3, v1, v2\\n"
+        "vredsum.vs v4, v3, v0\\n"
+        "nop\\n"));
+    for (int instruction = 0; instruction < 4; ++instruction)
+        manager.step();
+
+    EXPECT_EQ(readElement(*registers, 3, 0, 4), 5u);
+    EXPECT_EQ(readElement(*registers, 3, 1, 4), 12u);
+    EXPECT_EQ(readElement(*registers, 3, 2, 4), 21u);
+    EXPECT_EQ(readElement(*registers, 3, 3, 4), 32u);
+    EXPECT_EQ(readElement(*registers, 4, 0, 4), 70u);
+}
