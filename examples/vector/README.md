@@ -32,4 +32,4 @@ Expected results:
 | `vector_matrix_multiply_2x2.s` | Computes `[[1,2],[3,4]] x [[5,6],[7,8]]` and stores `[[19,22],[43,50]]` in row-major order. |
 The average example uses a signed scalar `div`, which truncates toward zero.
 When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3. The multiply/dot-product and SAXPY examples use SEW=32 and VL=4; the cross-product uses VL=3; the 2x2 matrix kernel uses VL=2 for dot products and VL=1 for scalar-element stores.
-These programs exercise the implemented subset, not general RVV 1.0 programs.
+These programs exercise the implemented subset, not general RVV 1.0 programs. The separate abstract execution timing model is documented in `docs/VECTOR_PERFORMANCE_MODEL.md` and is available as `kites-vector-timing`.

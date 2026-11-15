@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-15 (after successful CI run #122; cross/matrix kernel CI pending)
+Last updated: 2026-11-15 (after successful CI run #123; abstract timing model CI pending)
 
 ## Must-have core scope
 
@@ -26,23 +26,23 @@ Last updated: 2026-11-15 (after successful CI run #122; cross/matrix kernel CI p
 | Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
 | CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented; latest kernels pending CI | CI #119 ran the dot-product example; CI #122 smoke-tested SAXPY. Cross-product and 2x2 matrix examples and independent result tests are staged for CI #123. |
-| Scalar regression | Verified | CI #122 reports 100% tests passed with zero failures out of 350 non-disabled test cases: 349 passed, one skipped; four disabled tests (19.59 seconds). This includes existing scalar regressions. |
-| Scalar-vs-vector instruction-count comparison | Implemented and CI-verified | CI run #70 verifies a four-element sum with equal result and compares 8 scalar instructions with 4 vector instructions; this is an instruction-count metric, not a cycle-time claim. |
-| Short design/validation/limitations report | Updated and CI-verified | `docs/PROJECT_REPORT.md` summarizes architecture, the core subset plus selected bit-manipulation and strided-memory stretch work, and validation evidence from CI #73. Final team review before submission remains advisable. |
+| Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #123 smoke-tested the cross-product and 2x2 matrix examples; CI #119 tested the dot-product example and CI #122 smoke-tested SAXPY. The ten current vector examples are included in the RVSS example loop. |
+| Scalar regression | Verified | CI #123 reports 100% tests passed with zero failures in 352 non-disabled cases: 351 passed and one skipped; four tests disabled (29.49 seconds). This includes existing scalar regressions. |
+| Scalar-vs-vector comparison | Implemented and CI-verified for instruction count; timing-model CI pending | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate timing tool adds assumption-driven estimated-cycle comparisons. |
+| Short design/validation/limitations report | Updated; timing-model validation pending | `docs/PROJECT_REPORT.md` now distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence and deferred pipeline/reference work. Final team review before submission remains advisable. |
 
 ## Stretch scope
 
 | Stretch item | Status | Planned validation |
 |---|---|---|
-| Integer vector multiplication | Implemented and CI-verified | Added standard `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX), low-SEW-bit products, `v0.t` masking, and tail preservation. CI #119 passed four `vmul.vv`/dot-product tests; CI #122 passed three `vmul.vx` tests. |
+| Integer vector multiplication | Implemented and CI-verified | Added standard `vmul.vv` (OPMVV) and `vmul.vx` (OPMVX), low-SEW-bit products, `v0.t` masking, and tail preservation. CI #119 passed four `vmul.vv`/dot-product tests; CI #122 passed three `vmul.vx` tests; CI #123 passed the cross-product and matrix kernel tests. |
 | Dot-product and SAXPY kernels | Implemented and CI-verified | Dot product is `vmul.vv` followed by `vredsum.vs`; SAXPY is `vmul.vx` followed by `vadd.vv`. CI #119 and #122 smoke-tested these examples. |
 | Bit counts | Partially implemented; CI-verified | Added per-element `vclz.v`, `vctz.v`, and `vcpop.v`; CI #70 passed tests for zero input, all supported SEWs, masking, and tail preservation. |
 | AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Partially implemented; CI-verified | Added `vlse8/16/32/64.v` and `vsse8/16/32/64.v` with signed byte strides, optional `v0.t`, bounds/overflow checks, and undo/redo support. CI #73 passed tests for encoding/disassembly, all SEWs, zero and negative stride, masking, and store preflight. Indexed and segment forms remain unsupported. |
-| Cross-product and 2x2 matrix kernels | Implemented on branch; CI pending | Cross product composes two `vmul.vv` operations and `vsub.vv`; 2x2 multiplication composes four multiply/reduction pairs. Independent tests calculate expected results `[-3,6,-3]` and `[[19,22],[43,50]]`. |
-| Cycle-stepped vector-unit model | Not started | Explicit operation latency, lanes, dependencies and memory delays. |
-| Execution traces and performance statistics | Not started | Stable trace format, cycle/instruction counters, scalar-vs-vector kernel comparison. |
+| Cross-product and 2x2 matrix kernels | Implemented and CI-verified | Cross product composes two `vmul.vv` operations and `vsub.vv`; 2x2 multiplication composes four multiply/reduction pairs. Independent tests assert `[-3,6,-3]` and `[[19,22],[43,50]]`; both tests passed CI #123. |
+| Abstract vector-unit timing model | Implemented on branch; CI pending | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, estimated cycles and lane utilisation. It is an abstract scheduler, not a cycle-accurate processor model. |
+| Execution traces and performance statistics | Implemented on branch; CI pending | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. |
 | Selected pipelined vector instructions | Not started | Begin with a deliberately small subset; add hazard and dependency tests. |
 | Independent reference / Spike comparison | Not started | Compare supported assembled programs where reference tool/configuration is available. |
 

@@ -120,9 +120,10 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The vector example programs under `examples/vector/` provide runnable
+The ten vector example programs under `examples/vector/` provide runnable
 load-compute-store, comparison/count, masked-memory, average,
-selected bit-manipulation, and strided-memory workflows.
+selected bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
+cross-product, and 2x2 matrix-multiplication workflows.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
@@ -136,18 +137,42 @@ Strided-memory tests cover encoding/disassembly, all SEWs, zero stride, negative
 stride with masking, and active-lane store preflight; all five passed in CI run #73.
 CI run #73 (commit `aa963b9`) reports 100% tests passed with 0 failures out of
 343 CTest tests in 19.77 seconds; four tests were disabled and one was skipped.
-Subsequent CI #119 passed 346 active tests with no failures, one skipped and
-four disabled, validating `vmul.vv` and the dot-product example. CI #122 passed
-350 active tests with no failures, one skipped and four disabled, validating
-`vmul.vx` and the SAXPY smoke test. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
-and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319).
+Subsequent CI #119 passed 346 tests, with one skipped and four disabled,
+validating `vmul.vv` and the dot-product example. CI #122 passed 349 tests,
+with one skipped and four disabled, validating `vmul.vx` and the SAXPY smoke
+test. CI #123 passed 351 tests, with one skipped and four disabled; the
+cross-product and 2x2 matrix-kernel tests passed and both examples smoke-tested. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
+and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237).
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 executed all six runnable assembly examples on RVSS (including bit-manipulation
 and strided-memory examples), asserted that the average example prints `2`, and
 exercised the REPL `info` and `regs` commands by checking vector configuration
 and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).
 
-## 6. Known limitations
+## 6. Abstract performance model
+
+The project adds a separate `VectorTimingModel` and the
+`kites-vector-timing` command-line tool. This model estimates operation
+schedules for scalar and vector streams representing four-element addition,
+dot product, 2x2 matrix multiplication, and vector load-add-store.
+
+Its configurable assumptions include lane count, issue interval, scalar ALU
+latency, vector startup and lane-group latency, reduction overhead, base
+memory latency, and extra memory delay. It tracks register readiness for
+read-after-write and write-after-write dependencies and assumes one serialized
+memory resource. Its trace reports issue, start, and completion cycles, active
+elements, lane groups and slots, dependency stalls, and memory stalls. Summary
+statistics include estimated cycles, lane utilization, active elements per
+cycle, and scalar/vector estimated speedup.
+
+This is an abstract scheduling model, **not cycle-accurate hardware or pipeline
+simulation**. It does not model caches, memory banks, vector register ports,
+precise pipeline stages, out-of-order issue, or full processor microarchitecture.
+Its scalar/vector streams are hand-authored representatives, not extracted
+dynamically from RVSS execution. The assumptions and limitations are documented
+in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
+
+## 7. Known limitations
 
 - Vector execution is implemented only in the single-cycle RVSS processor.
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
@@ -166,11 +191,10 @@ and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RV
 - Indexed/segment/fault-only-first/whole-register memory operations are not
   implemented. Strided memory is limited to the eight one-field EEW=SEW forms
   listed above.
-- The implementation does not add a cycle-stepped vector unit, vector
-  pipeline hazard handling, a complete RVV reference comparison, or the
-  associated performance timing model.
+- The abstract timing model does not integrate vector instructions into the
+  five-stage pipeline variants and is not a cycle-accurate processor model.
 
-## 7. Stretch work and deferred items
+## 8. Stretch work and deferred items
 
 The project scope identifies bit-manipulation operations, strided memory,
 cycle-stepped execution/performance modeling, pipeline integration, and

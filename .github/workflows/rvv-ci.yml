@@ -63,8 +63,8 @@ jobs:
           -DDISABLE_GUI=ON
           -DVM_DEBUG_PRINTS=OFF
 
-      - name: Build CLI and test suite
-        run: cmake --build build/ci --target kites_cli kites_test --parallel 2
+      - name: Build CLI, vector timing model, and test suite
+        run: cmake --build build/ci --target kites_cli kites_vector_timing kites_test --parallel 2
 
       - name: Smoke-test RVSS vector examples and CLI inspection
         shell: bash
@@ -84,6 +84,15 @@ jobs:
           repl_output="$(printf '%s' "$repl_input" | ./build/ci/kites-cli examples/vector/vector_load_add_store.s --repl)"
           grep -Fq 'VLEN=128, LMUL=1' <<< "$repl_output"
           grep -Fq 'Vector registers (128-bit):' <<< "$repl_output"
+
+          timing_output="$(./build/ci/kites-vector-timing --lanes 4 --memory-delay 2 --no-trace)"
+          printf '%s\n' "$timing_output"
+          grep -Fq 'Kites abstract vector timing model' <<< "$timing_output"
+          grep -Fq 'Four-element dot product' <<< "$timing_output"
+          grep -Fq 'estimated speedup:' <<< "$timing_output"
+          grep -Fq 'memory stall cycles:' <<< "$timing_output"
+          timing_help="$(./build/ci/kites-vector-timing --help)"
+          grep -Fq 'Usage: kites-vector-timing' <<< "$timing_help"
 
       - name: Run tests
         env:

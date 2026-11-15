@@ -38,7 +38,7 @@ set_source_files_properties(${LUA_SRC_FILES}
 )
 
 
-file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp")
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp")
 file(GLOB_RECURSE TEST_FILES "${TEST_DIR}/*.cpp")
 file(GLOB_RECURSE UI_FILES "${SRC_DIR}/*.ui")
 file(GLOB_RECURSE HEADER_FILES
@@ -130,6 +130,15 @@ target_link_libraries(kites_cli PRIVATE kites_core)
 target_compile_definitions(kites_cli PRIVATE DISABLE_GUI)
 
 install(TARGETS kites_cli
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# Standalone abstract vector execution timing model.
+add_executable(kites_vector_timing tools/vector_timing_main.cpp)
+set_target_properties(kites_vector_timing PROPERTIES OUTPUT_NAME "kites-vector-timing")
+target_link_libraries(kites_vector_timing PRIVATE kites_core)
+
+install(TARGETS kites_vector_timing
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
