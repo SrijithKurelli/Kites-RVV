@@ -400,6 +400,18 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 const uint32_t zimm = static_cast<uint32_t>(std::stoul(block.getImm()));
                 code = (zimm << 20) | (rs1 << 15) | (0b111u << 12) | (rd << 7) | 0x57u;
             }
+            else if (block.getOpcode() == "vmv.x.s")
+            {
+                // Scalar destination, vector source in vs2; vm=1, vs1=0, funct3=010.
+                code = (0b010000u << 26) | (1u << 25) | (rs1 << 20) |
+                       (0b010u << 12) | (rd << 7) | 0x57u;
+            }
+            else if (block.getOpcode() == "vmv.s.x")
+            {
+                // Vector destination, scalar source in rs1; vs2=0, vm=1, funct3=110.
+                code = (0b010000u << 26) | (1u << 25) | (rs1 << 15) |
+                       (0b110u << 12) | (rd << 7) | 0x57u;
+            }
             else if (block.getOpcode() == "vcpop.m")
             {
                 const uint32_t vs2 = rs1;
