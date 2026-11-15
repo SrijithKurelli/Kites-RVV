@@ -1279,13 +1279,13 @@ TEST(VectorExtension, MaskedBitCountsPreserveInactiveAndTailElements)
 TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
 {
     const auto program = assembleVectorSource(
-        "vmul.vv v1, v2, v3\\n"
-        "vmul.vv v4, v5, v6, v0.t\\n"
-        "vmul.vx v7, v8, x9\\n"
-        "vmul.vx v10, v11, a0, v0.t\\n"
-        "vadd.vx v12, v13, x14\\n"
-        "vadd.vi v15, v16, -3\\n"
-        "vadd.vi v17, v18, 15, v0.t\\n");
+        "vmul.vv v1, v2, v3\n"
+        "vmul.vv v4, v5, v6, v0.t\n"
+        "vmul.vx v7, v8, x9\n"
+        "vmul.vx v10, v11, a0, v0.t\n"
+        "vadd.vx v12, v13, x14\n"
+        "vadd.vi v15, v16, -3\n"
+        "vadd.vi v17, v18, 15, v0.t\n");
 
     ASSERT_EQ(program.text_buffer.size(), 7u);
     const uint32_t vmul_vv =
@@ -1349,11 +1349,11 @@ TEST(VectorExtension, VectorMultiplyExecutesForEverySupportedSEW)
         }
 
         const std::string source =
-            "vsetvli x7, x5, " + std::to_string(test_case.zimm) + "\\n" +
-            "vmul.vv v3, v1, v2\\n"
-            "vmul.vx v4, v1, x6\\n"
-            "vadd.vx v5, v1, x6\\n"
-            "vadd.vi v6, v1, -2\\n";
+            "vsetvli x7, x5, " + std::to_string(test_case.zimm) + "\n" +
+            "vmul.vv v3, v1, v2\n"
+            "vmul.vx v4, v1, x6\n"
+            "vadd.vx v5, v1, x6\n"
+            "vadd.vi v6, v1, -2\n";
         manager.loadProgram(assembleVectorSource(source));
         manager.step();
         manager.step();
@@ -1393,8 +1393,8 @@ TEST(VectorExtension, MaskedVectorMultiplyPreservesInactiveLanes)
 
     manager.getRegisterFile()->WriteGpr(5, 4);
     manager.loadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 16\\n"
-        "vmul.vv v3, v1, v2, v0.t\\n"));
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v3, v1, v2, v0.t\n"));
     manager.step();
     manager.step();
 
@@ -1420,10 +1420,10 @@ TEST(VectorExtension, DotProductComposesVectorMultiplyAndReduction)
 
     manager.getRegisterFile()->WriteGpr(5, 4);
     manager.loadProgram(assembleVectorSource(
-        "vsetvli x6, x5, 16\\n"
-        "vmul.vv v3, v1, v2\\n"
-        "vredsum.vs v4, v3, v0\\n"
-        "nop\\n"));
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v3, v1, v2\n"
+        "vredsum.vs v4, v3, v0\n"
+        "nop\n"));
     for (int instruction = 0; instruction < 4; ++instruction)
         manager.step();
 
