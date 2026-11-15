@@ -50,10 +50,26 @@ implemented encodings. The assembly operand order is `vd, vs2, vs1`.
 
 ### Selected integer vector multiplication
 
-The following selected standard vector multiply instructions are supported in
-RVSS. Both return only the low `SEW` bits of each product; they do not
-produce widened or high-half results. As a result, signed and unsigned source
-interpretations produce the same low-bit result. Each form accepts an optional
+The subset implements two standard integer vector multiply forms in the RVSS
+processor. Each operation returns only the low `SEW` bits of each product; it
+does not produce widened or high-half results. Therefore the low-bit result is
+the same for signed and unsigned interpretations of the input bit patterns.
+
+- `vmul.vv vd, vs2, vs1` — multiply corresponding elements of two vector
+  registers.
+- `vmul.vx vd, vs2, rs1` — multiply each element of `vs2` by the scalar
+  integer value in GPR `x[rs1]`, truncated to the configured `SEW`.
+
+Both forms accept an optional trailing `, v0.t` predicate. Only active lanes
+below `vl` are written; masked-off lanes and tail elements remain undisturbed.
+The vector-vector form uses OPMVV (`funct6=0b100101`,
+`funct3=0b010`); the vector-scalar form uses OPMVX
+(`funct6=0b100101`, `funct3=0b110`). Both use vector opcode
+`0x57`.
+
+A dot product composes `vmul.vv` with the existing `vredsum.vs` reduction.
+SAXPY composes `vmul.vx` with `vadd.vv`. These kernels use standard vector
+instructions; no custom dot-product or multiply-accumulate opcode is introduced.
 
 The following operations apply bitwise to each active SEW-sized lane and accept an optional trailing `, v0.t` mask operand:
 
@@ -160,7 +176,28 @@ capture undo data before writing, preventing a partial store if a later active
 lane is out of range. Indexed and segment vector memory operations are not
 supported.
 
+### Cross-product and matrix-multiplication kernels
+
+The examples demonstrate higher-level computations composed from the selected
+vector instructions; no custom cross-product or matrix-multiply opcodes are
+introduced.
+
+- `vector_cross_product.s` computes
+  `[Ay*Bz-Az*By, Az*Bx-Ax*Bz, Ax*By-Ay*Bx]`. It loads prearranged operand
+  streams, uses two `vmul.vv` instructions and one `vsub.vv`, then stores
+  the three results. Prearranging the operands avoids requiring a vector
+  permutation instruction.
+- `vector_matrix_multiply_2x2.s` multiplies two 2x2 matrices. The right-hand
+  matrix is stored as columns. Each output element is a row/column dot product
+  using `vmul.vv` followed by `vredsum.vs`; each scalar result is stored
+  using the existing vector store path. The example output is
+  `[[19,22],[43,50]]`.
+
+These are SEW=32 integer demonstrations, not a general matrix library or an
+overflow-safe arbitrary-precision implementation.
+
 ## Runnable example programs
+
 
 The repository includes end-to-end assembly examples in `examples/vector/`:
 
@@ -172,6 +209,8 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_strided_memory.s` — positive-stride SEW=32 load/store, selecting every second word.
 - `vector_multiply_dot_product.s` — vector-vector multiplication and dot product using `vmul.vv` plus `vredsum.vs`.
 - `vector_saxpy.s` — SAXPY (`alpha*x + y`) using `vmul.vx` and `vadd.vv`.
+- `vector_cross_product.s` — 3D cross product using two `vmul.vv` operations and `vsub.vv`.
+- `vector_matrix_multiply_2x2.s` — 2x2 matrix multiplication using vector multiplication and sum reductions.
 
 See `examples/vector/README.md` for commands and expected results.
 
@@ -248,11 +287,11 @@ instruction encoding, arithmetic, logical and selected bit-manipulation operatio
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, unsupported vector memory forms, and
 strided memory assembly/execution across SEWs, zero stride, negative stride
-with masking, and active-address store preflight. Vector multiply tests cover
-OPMVV and OPMVX assembly encoding/disassembly, low-bit wraparound at all four
-SEWs, scalar sign/zero/boundary inputs, and masked/tail preservation. CI run #119
-passed all four `vmul.vv` and dot-product tests; the newly added `vmul.vx` tests
-are awaiting their first CI result. The full CMake test suite requires Qt 6.9.2 and
+with masking, and active-address store preflight. Vector multiply tests cover OPMVV and OPMVX assembly encoding/disassembly,
+low-bit wraparound at all four SEWs, scalar sign/boundary inputs, and
+masked/tail preservation. CI #119 passed all four `vmul.vv`/dot-product tests;
+CI #122 passed all three `vmul.vx` tests. The cross-product and matrix-kernel
+tests are being validated in the next CI run. The full CMake test suite requires Qt 6.9.2 and
 GoogleTest. CI run #73 reports 100% tests passed with zero failures out of 343
 CTest tests in 19.77 seconds; four tests were disabled and one was skipped. It
 also smoke-tested all six runnable examples, including `vector_bitmanip.s` and

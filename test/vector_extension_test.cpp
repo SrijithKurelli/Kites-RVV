@@ -1513,3 +1513,89 @@ TEST(VectorExtension, MaskedVectorScalarMultiplyPreservesInactiveLanes)
     EXPECT_EQ(readElement(vm.registers_, 4, 2, 4), 28u);
     EXPECT_EQ(readElement(vm.registers_, 4, 3, 4), 0xA5A5A5A5u);
 }
+
+
+TEST(VectorExtension, CrossProductUsesVectorMultiplyAndSubtraction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 3);
+
+    const int32_t a[] = {1, 2, 3};
+    const int32_t b[] = {4, 5, 6};
+    const int32_t left_first[] = {a[1], a[2], a[0]};
+    const int32_t right_first[] = {b[2], b[0], b[1]};
+    const int32_t left_second[] = {a[2], a[0], a[1]};
+    const int32_t right_second[] = {b[1], b[2], b[0]};
+    for (size_t lane = 0; lane < 3; ++lane)
+    {
+        writeElement(vm.registers_, 1, lane, 4, static_cast<uint32_t>(left_first[lane]));
+        writeElement(vm.registers_, 2, lane, 4, static_cast<uint32_t>(right_first[lane]));
+        writeElement(vm.registers_, 3, lane, 4, static_cast<uint32_t>(left_second[lane]));
+        writeElement(vm.registers_, 4, lane, 4, static_cast<uint32_t>(right_second[lane]));
+    }
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v5, v1, v2\n"
+        "vmul.vv v6, v3, v4\n"
+        "vsub.vv v7, v5, v6\n"));
+    for (int instruction = 0; instruction < 4; ++instruction)
+        vm.Step();
+
+    const int32_t expected[] = {
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    };
+    for (size_t lane = 0; lane < 3; ++lane)
+        EXPECT_EQ(readElement(vm.registers_, 7, lane, 4),
+                  static_cast<uint32_t>(expected[lane]));
+}
+
+TEST(VectorExtension, MatrixMultiply2x2UsesVectorMultiplyAndReduction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 2);
+
+    const int32_t a[2][2] = {{1, 2}, {3, 4}};
+    const int32_t b[2][2] = {{5, 6}, {7, 8}};
+    for (size_t k = 0; k < 2; ++k)
+    {
+        writeElement(vm.registers_, 1, k, 4, static_cast<uint32_t>(a[0][k]));
+        writeElement(vm.registers_, 2, k, 4, static_cast<uint32_t>(a[1][k]));
+        writeElement(vm.registers_, 3, k, 4, static_cast<uint32_t>(b[k][0]));
+        writeElement(vm.registers_, 4, k, 4, static_cast<uint32_t>(b[k][1]));
+    }
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\n"
+        "vmul.vv v5, v1, v3\n"
+        "vredsum.vs v6, v5, v0\n"
+        "vmul.vv v5, v1, v4\n"
+        "vredsum.vs v7, v5, v0\n"
+        "vmul.vv v5, v2, v3\n"
+        "vredsum.vs v8, v5, v0\n"
+        "vmul.vv v5, v2, v4\n"
+        "vredsum.vs v9, v5, v0\n"));
+    for (int instruction = 0; instruction < 9; ++instruction)
+        vm.Step();
+
+    int32_t expected[2][2] = {};
+    for (size_t row = 0; row < 2; ++row)
+        for (size_t column = 0; column < 2; ++column)
+            for (size_t k = 0; k < 2; ++k)
+                expected[row][column] += a[row][k] * b[k][column];
+
+    const size_t result_registers[] = {6, 7, 8, 9};
+    size_t result_index = 0;
+    for (size_t row = 0; row < 2; ++row)
+    {
+        for (size_t column = 0; column < 2; ++column)
+        {
+            EXPECT_EQ(readElement(vm.registers_, result_registers[result_index++], 0, 4),
+                      static_cast<uint32_t>(expected[row][column]));
+        }
+    }
+}

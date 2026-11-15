@@ -39,6 +39,12 @@ VL is limited by VLMAX=VLEN/SEW and the scalar AVL value. The implemented
 
 ### Arithmetic, logic, and comparisons
 
+Selected integer multiplication is implemented with `vmul.vv` (OPMVV) and
+`vmul.vx` (OPMVX). Both produce the low SEW bits, accept the implemented
+`v0.t` mask form, and preserve masked-off and tail elements. High-half and
+widening products are not implemented.
+
+
 Supported vector-vector arithmetic is `vadd.vv` and `vsub.vv`, with
 element-width wraparound. Supported logical operations are `vand.vv`,
 `vor.vv`, and `vxor.vv`. Equality, inequality, signed less-than, and
@@ -97,6 +103,15 @@ VLEN, LMUL, SEW, VL, and VLMAX for RVSS; the JSON register dump contains
 
 ## 5. Validation strategy and evidence
 
+Higher-level assembly kernels demonstrate the selected primitives:
+`vector_multiply_dot_product.s` uses `vmul.vv` plus `vredsum.vs`;
+`vector_saxpy.s` uses `vmul.vx` plus `vadd.vv`;
+`vector_cross_product.s` uses two `vmul.vv` operations and `vsub.vv`;
+and `vector_matrix_multiply_2x2.s` evaluates four row/column dot products
+using vector multiply and reduction. These are composed kernels, not custom
+ISA instructions.
+
+
 Validation uses hand-calculated expected values and the existing CMake/CTest
 suite. The vector-specific tests cover register storage/reset, instruction
 encoding/disassembly, all supported SEWs, arithmetic wraparound, logical
@@ -105,7 +120,7 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The six example programs under `examples/vector/` provide runnable
+The vector example programs under `examples/vector/` provide runnable
 load-compute-store, comparison/count, masked-memory, average,
 selected bit-manipulation, and strided-memory workflows.
 The test suite also compares a four-element scalar sum with the vector
@@ -121,6 +136,11 @@ Strided-memory tests cover encoding/disassembly, all SEWs, zero stride, negative
 stride with masking, and active-lane store preflight; all five passed in CI run #73.
 CI run #73 (commit `aa963b9`) reports 100% tests passed with 0 failures out of
 343 CTest tests in 19.77 seconds; four tests were disabled and one was skipped.
+Subsequent CI #119 passed 346 active tests with no failures, one skipped and
+four disabled, validating `vmul.vv` and the dot-product example. CI #122 passed
+350 active tests with no failures, one skipped and four disabled, validating
+`vmul.vx` and the SAXPY smoke test. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
+and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319).
 The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 executed all six runnable assembly examples on RVSS (including bit-manipulation
 and strided-memory examples), asserted that the average example prints `2`, and
@@ -132,7 +152,7 @@ and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RV
 - Vector execution is implemented only in the single-cycle RVSS processor.
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
   8, 16, 32, and 64 bits.
-- Only the selected integer arithmetic, logical, comparison, reduction,
+- Only the selected integer arithmetic, multiplication, logical, comparison, reduction,
   population-count, unit-stride memory, and strided memory operations listed
   above are implemented.
 - `vsetivli`, `vsetvl`, other vector configuration encodings, and official

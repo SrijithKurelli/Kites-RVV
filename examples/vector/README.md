@@ -12,6 +12,8 @@ root after building `kites-cli`:
 ./build/kites-cli examples/vector/vector_strided_memory.s --vm rvss
 ./build/kites-cli examples/vector/vector_multiply_dot_product.s --vm rvss
 ./build/kites-cli examples/vector/vector_saxpy.s --vm rvss
+./build/kites-cli examples/vector/vector_cross_product.s --vm rvss
+./build/kites-cli examples/vector/vector_matrix_multiply_2x2.s --vm rvss
 ```
 
 Expected results:
@@ -26,7 +28,8 @@ Expected results:
 | `vector_strided_memory.s` | Strided SEW=32 load selects source words 11, 22, and 33 (skipping padding words) and strided store writes those three values to destination word positions 0, 2, and 4. |
 | `vector_multiply_dot_product.s` | `vmul.vv` produces [12, -21, -8, 15]; `vredsum.vs` computes the dot product -2. |
 | `vector_saxpy.s` | With alpha=3, computes `3*x + y` and stores [13, 14, 39, 52]. |
-
+| `vector_cross_product.s` | Computes `[1,2,3] x [4,5,6]` and stores `[-3,6,-3]`. |
+| `vector_matrix_multiply_2x2.s` | Computes `[[1,2],[3,4]] x [[5,6],[7,8]]` and stores `[[19,22],[43,50]]` in row-major order. |
 The average example uses a signed scalar `div`, which truncates toward zero.
-When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3. The multiply/dot-product and SAXPY examples use SEW=32 and VL=4.
+When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3. The multiply/dot-product and SAXPY examples use SEW=32 and VL=4; the cross-product uses VL=3; the 2x2 matrix kernel uses VL=2 for dot products and VL=1 for scalar-element stores.
 These programs exercise the implemented subset, not general RVV 1.0 programs.
