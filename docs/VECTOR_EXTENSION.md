@@ -45,21 +45,21 @@ Supported forms are:
 - `vadd.vi vd, vs2, imm` — vector plus signed five-bit immediate (`-16..15`).
 - `vsub.vv vd, vs2, vs1` — vector minus vector.
 
-All forms accept an optional trailing `, v0.t` mask operand.
+All forms accept an optional trailing `, v0.t` mask operand. They use the
+current `SEW` and operate on the first `vl` elements. Addition and subtraction
+wrap modulo the element width. When masked, inactive destination lanes remain
+unchanged; elements beyond `vl` are preserved (tail-undisturbed).
 
+### Vector multiplication
 
-These operations use the current `SEW` and operate on the first `vl` elements.
-Addition, subtraction, and multiplication wrap modulo the element width. The
-following multiplication forms are implemented:
+The following multiplication forms are implemented:
 
 - `vmul.vv vd, vs2, vs1` — multiply corresponding vector elements.
 - `vmul.vx vd, vs2, rs1` — multiply each vector element by the scalar GPR value.
 
-Both multiplication forms accept an optional `, v0.t` mask operand. Only the
-low SEW bits of each product are written, so the result is the product modulo
-`2^SEW`. When masked, only lanes with the corresponding `v0` predicate bit set
-execute; masked-off destination lanes remain unchanged. Elements beyond `vl`
-are preserved (tail-undisturbed).
+Both forms accept an optional `, v0.t` mask operand. Only the low SEW bits of
+each product are written, so the result is the product modulo `2^SEW`. Masked-off
+and tail destination lanes remain undisturbed.
 
 Vector instructions use the standard 32-bit instruction word layout for the
 implemented encodings. The assembly operand order is `vd, vs2, vs1`.
