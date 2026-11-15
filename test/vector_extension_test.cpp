@@ -1433,3 +1433,98 @@ TEST(VectorExtension, DotProductComposesVectorMultiplyAndReduction)
     EXPECT_EQ(readElement(*registers, 3, 3, 4), 32u);
     EXPECT_EQ(readElement(*registers, 4, 0, 4), 70u);
 }
+
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesScalarVectorMoves)
+{
+    const auto program = assembleVectorSource(
+        "vmv.x.s x10, v1\n"
+        "vmv.s.x v2, a1\n");
+    ASSERT_EQ(program.text_buffer.size(), 2u);
+
+    const uint32_t vmv_x_s =
+        (0b010000u << 26) | (1u << 25) | (1u << 20) |
+        (0b010u << 12) | (10u << 7) | 0x57u;
+    const uint32_t vmv_s_x =
+        (0b010000u << 26) | (1u << 25) | (11u << 15) |
+        (0b110u << 12) | (2u << 7) | 0x57u;
+
+    EXPECT_EQ(program.text_buffer[0], vmv_x_s);
+    EXPECT_EQ(program.text_buffer[1], vmv_s_x);
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]), "vmv.x.s x10, v1");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]), "vmv.s.x v2, x11");
+}
+
+TEST(VectorExtension, ScalarVectorMovesRespectSEWAndSignExtension)
+{
+    struct Case
+    {
+        int zimm;
+        size_t element_bytes;
+        uint64_t vector_value;
+    };
+    const Case cases[] = {
+        {0, 1, 0x80u},
+        {8, 2, 0x8001u},
+        {16, 4, 0x80000001u},
+        {24, 8, 0x8000000000000001ull}
+    };
+    constexpr uint64_t scalar = 0x1122334455667788ull;
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+        auto *registers = manager.getRegisterFile();
+        registers->WriteGpr(5, 1);
+        registers->WriteGpr(6, scalar);
+        writeElement(*registers, 1, 0, test_case.element_bytes, test_case.vector_value);
+        for (size_t byte = test_case.element_bytes; byte < 16; ++byte)
+            registers->WriteVectorByte(1, byte, 0xA5u);
+        for (size_t byte = 0; byte < 16; ++byte)
+            registers->WriteVectorByte(2, byte, 0x5Au);
+
+        const std::string source =
+            "vsetvli x8, x5, " + std::to_string(test_case.zimm) + "\n" +
+            "vmv.x.s x7, v1\n"
+            "vmv.s.x v3, x6\n";
+        manager.loadProgram(assembleVectorSource(source));
+        manager.step();
+        manager.step();
+        manager.step();
+
+        uint64_t expected_read = test_case.vector_value;
+        const size_t width_bits = test_case.element_bytes * 8;
+        if (width_bits < 64 && ((expected_read >> (width_bits - 1)) & 1u))
+            expected_read |= (~uint64_t{0}) << width_bits;
+        EXPECT_EQ(registers->ReadGpr(7), expected_read);
+
+        const uint64_t element_mask = width_bits == 64
+            ? UINT64_MAX
+            : ((uint64_t{1} << width_bits) - 1u);
+        EXPECT_EQ(readElement(*registers, 3, 0, test_case.element_bytes), scalar & element_mask);
+        for (size_t byte = test_case.element_bytes; byte < 16; ++byte)
+            EXPECT_EQ(registers->ReadVectorByte(3, byte), 0x5Au);
+    }
+}
+
+TEST(VectorExtension, ScalarVectorMoveSemanticsWhenVectorLengthIsZero)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+    writeElement(*registers, 1, 0, 4, 0xFFFFFFFFu);
+    registers->WriteVectorByte(2, 0, 0x34u);
+    registers->WriteGpr(6, 0x12345678u);
+    registers->WriteGpr(7, 4);
+
+    manager.loadProgram(assembleVectorSource(
+        "vsetvli x0, x0, 16\n"
+        "vmv.x.s x8, v1\n"
+        "vmv.s.x v2, x6\n"));
+    manager.step();
+    manager.step();
+    manager.step();
+
+    EXPECT_EQ(registers->ReadGpr(8), static_cast<uint64_t>(-1));
+    EXPECT_EQ(registers->ReadVectorByte(2, 0), 0x34u);
+}
