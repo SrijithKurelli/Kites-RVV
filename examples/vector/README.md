@@ -25,6 +25,9 @@ Expected results:
 | `vector_average_selected.s` | The selected values are 1 and 4; sum=5, count=2, integer average=2. The program prints `2`. |
 | `vector_bitmanip.s` | On 8-bit lanes: AND-NOT [128, 64, 0, 251], rotate-left [3, 9, 0, 255], rotate-right [192, 144, 0, 255], leading/trailing zeros [0, 1, 8, 0], and population counts [2, 2, 0, 8]. |
 | `vector_strided_memory.s` | Strided SEW=32 load selects source words 11, 22, and 33 (skipping padding words) and strided store writes those three values to destination word positions 0, 2, and 4. |
+| `vector_dot_product.s` | Dot product of `[1, 2, 3, 4]` and `[5, 6, 7, 8]`; prints `70`. |
+| `vector_cross_product.s` | Cross product of `(1, 2, 3)` and `(4, 5, 6)`; stores and prints `(-3, 6, -3)`. |
+| `vector_matrix_multiply_2x2.s` | Multiplies `[[1,2],[3,4]]` by `[[5,6],[7,8]]`; stores and prints `[[19,22],[43,50]]`. |
 
 The average example uses a signed scalar `div`, which truncates toward zero.
 When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3.
