@@ -20,8 +20,9 @@ Expected results are:
 
 The reference program is assembled independently by the RISC-V GNU toolchain.
 It is not assembled by Kites and does not use Kites' instruction encoder. Spike
-executes it with the standard RVV 1.0 V extension. The workflow pins Spike to
-release v1.1.0 and uses the rv64gcv profile. Spike's V extension implies
+executes it with the standard RVV 1.0 V extension. The workflow pins Spike to upstream commit
+`118480991eb16c6a6f40b94fdc35acc9da2ceacd` (reported by its VERSION file as
+`1.1.1-dev`) and uses the standard `rv64gcv` profile. Spike's V extension implies
 Zve64d and Zvl128b, giving ELEN=64 and VLEN=128 for this reference
 configuration. This matches the vector register length and element-width
 capabilities configured by the Kites RVSS subset.
@@ -41,12 +42,13 @@ sudo apt-get install -y \
   binutils-riscv64-unknown-elf
 ```
 
-Build Spike 1.1.0:
+Build Spike 1.1.1-dev:
 
 ```bash
-git clone --depth 1 --branch v1.1.0 \
+git clone --no-checkout \
   https://github.com/riscv-software-src/riscv-isa-sim.git
 cd riscv-isa-sim
+git checkout --detach 118480991eb16c6a6f40b94fdc35acc9da2ceacd
 git submodule update --init --recursive
 mkdir build
 cd build
@@ -63,16 +65,17 @@ Run the reference check from the Kites repository root:
 tests/spike/run_spike_reference.sh
 ```
 
-The script compiles vector_subset_reference.S into a bare-metal ELF with a
-linker script at 0x80000000, starts Spike in debug mode, runs until the program
-reaches its _done label, reads the result GPRs, and compares all nine values
+The script compiles `vector_subset_reference.S` into a bare-metal ELF with a
+linker script at `0x80000000`, starts Spike in debug mode, runs until the program
+reaches its `_done` label, reads the result GPRs, and compares all nine values
 to the expected 64-bit representations.
 
 ## CI
 
 The separate GitHub Actions workflow
-.github/workflows/spike-reference.yml builds Spike 1.1.0 and runs the same
-script on Ubuntu 24.04. This keeps the normal Qt/CMake/CTest workflow free of
+`.github/workflows/spike-reference.yml` builds Spike from the pinned upstream
+commit `118480991eb16c6a6f40b94fdc35acc9da2ceacd` and runs the same script on
+Ubuntu 24.04. This keeps the normal Qt/CMake/CTest workflow free of
 the additional simulator build dependencies.
 
 ## Scope and limitations

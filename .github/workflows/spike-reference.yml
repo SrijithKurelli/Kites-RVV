@@ -29,11 +29,12 @@ jobs:
             gcc-riscv64-unknown-elf \
             binutils-riscv64-unknown-elf
 
-      - name: Build pinned Spike 1.1.0
+      - name: Build pinned Spike 1.1.1-dev (upstream commit)
         run: |
-          git clone --depth 1 --branch v1.1.0 \
+          git clone --no-checkout \
             https://github.com/riscv-software-src/riscv-isa-sim.git \
             "$RUNNER_TEMP/riscv-isa-sim"
+          git -C "$RUNNER_TEMP/riscv-isa-sim" checkout --detach 118480991eb16c6a6f40b94fdc35acc9da2ceacd
           git -C "$RUNNER_TEMP/riscv-isa-sim" submodule update --init --recursive
           mkdir "$RUNNER_TEMP/spike-build"
           cd "$RUNNER_TEMP/spike-build"
@@ -44,4 +45,4 @@ jobs:
           echo "$RUNNER_TEMP/spike-install/bin" >> "$GITHUB_PATH"
 
       - name: Compare RVSS vector golden results with Spike
-        run: tests/spike/run_spike_reference.sh
+        run: bash tests/spike/run_spike_reference.sh
