@@ -806,6 +806,51 @@ bool Parser::parse_O_VEC_C_LP_GPR_RP_C_GPR()
     return true;
 }
 
+bool Parser::parse_O_GPR_C_I_C_VTYPEI()
+{
+    const unsigned int line = currentToken().line_number;
+    if (peekToken(1).line_number != line || peekToken(1).type != TokenType::GP_REGISTER ||
+        peekToken(2).line_number != line || peekToken(2).type != TokenType::COMMA ||
+        peekToken(3).line_number != line || peekToken(3).type != TokenType::NUM ||
+        peekToken(4).line_number != line || peekToken(4).type != TokenType::COMMA ||
+        peekToken(5).line_number != line || peekToken(5).type != TokenType::NUM ||
+        (peekToken(6).type != TokenType::EOF_ && peekToken(6).line_number == line))
+    {
+        return false;
+    }
+
+    const int64_t avl = std::stoll(peekToken(3).value);
+    const int64_t vtypei = std::stoll(peekToken(5).value);
+    if (avl < 0 || avl > 31)
+    {
+        recordError(ParseError(peekToken(3).line_number,
+                               "vsetivli AVL immediate must be in the range 0 through 31"));
+        skipCurrentLine();
+        return true;
+    }
+    if (vtypei < 0 || vtypei > 255 || (vtypei & 0x7) != 0 ||
+        ((vtypei >> 3) & 0x7) > 3)
+    {
+        recordError(ParseError(peekToken(5).line_number,
+                               "Unsupported vtypei: require LMUL=1 and SEW=8/16/32/64"));
+        skipCurrentLine();
+        return true;
+    }
+
+    ICUnit block;
+    block.setOpcode(currentToken().value);
+    block.setLineNumber(line);
+    block.setInstructionIndex(instruction_index_);
+    block.setRd(reg_alias_to_name.at(peekToken(1).value));
+    block.setRs1(std::to_string(avl));
+    block.setImm(std::to_string(vtypei));
+    skipCurrentLine();
+    intermediate_code_.emplace_back(block, true);
+    instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+    ++instruction_index_;
+    return true;
+}
+
 bool Parser::parse_O_GPR_C_GPR_C_VTYPEI()
 {
     const unsigned int line = currentToken().line_number;
