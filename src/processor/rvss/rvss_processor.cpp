@@ -13,6 +13,7 @@
 #include "utils/utils.h"
 #include <QDebug>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <condition_variable>
