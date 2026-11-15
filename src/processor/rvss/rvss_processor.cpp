@@ -611,6 +611,34 @@ void RVSSProcessor::ExecuteVector()
         return a < b;
     };
 
+    // OPMVV vmul.vv returns the low SEW bits of each element product.
+    // Unsigned multiplication gives the required two's-complement low bits
+    // for both signed and unsigned source interpretations.
+    if (funct3 == 0b010 && funct6 == 0b100101)
+    {
+        const auto lhs = registers_.ReadVector(vs2);
+        const auto rhs = registers_.ReadVector(vs1);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t product = readElement(lhs, lane) * readElement(rhs, lane);
+            writeElement(result, lane, product & element_mask);
+        }
+
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
     // Selected OPMVV unary bit-count operations. Zero inputs produce SEW for vclz/vctz/vcpop.v
 
     

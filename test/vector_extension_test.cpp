@@ -1275,3 +1275,148 @@ TEST(VectorExtension, MaskedBitCountsPreserveInactiveAndTailElements)
     for (size_t byte = 3; byte < 16; ++byte)
         EXPECT_EQ(vm.registers_.ReadVectorByte(3, byte), 0xAAu);
 }
+
+
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
+{
+    const auto program = assembleVectorSource(
+        "vmul.vv v7, v8, v9\\n"
+        "vmul.vv v10, v11, v12, v0.t\\n");
+    ASSERT_EQ(program.text_buffer.size(), 2u);
+
+    const auto opmvv = [](uint32_t vd, uint32_t vs2, uint32_t vs1, uint32_t vm)
+    {
+        return (0b100101u << 26) | (vm << 25) | (vs2 << 20) |
+               (vs1 << 15) | (0b010u << 12) | (vd << 7) | 0x57u;
+    };
+
+    EXPECT_EQ(program.text_buffer[0], opmvv(7, 8, 9, 1));
+    EXPECT_EQ(program.text_buffer[1], opmvv(10, 11, 12, 0));
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
+              "vmul.vv v7, v8, v9");
+    EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]),
+              "vmul.vv v10, v11, v12, v0.t");
+}
+
+TEST(VectorExtension, VectorMultiplyWrapsAtEverySupportedSew)
+{
+    const struct Case { int zimm; size_t sew; size_t bytes; size_t lanes; } cases[] = {
+        {0, 8, 1, 4}, {8, 16, 2, 4}, {16, 32, 4, 4}, {24, 64, 8, 2},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        vm.registers_.WriteGpr(5, test_case.lanes);
+
+        const uint64_t element_mask = test_case.sew == 64
+                                          ? UINT64_MAX
+                                          : ((uint64_t{1} << test_case.sew) - 1u);
+        const uint64_t sign_bit = uint64_t{1} << (test_case.sew - 1u);
+        uint64_t sentinel = 0;
+        for (size_t byte = 0; byte < test_case.bytes; ++byte)
+            sentinel |= uint64_t{0xA5} << (8u * byte);
+
+        writeElement(vm.registers_, 2, 0, test_case.bytes, element_mask);
+        writeElement(vm.registers_, 3, 0, test_case.bytes, 3u);
+        writeElement(vm.registers_, 2, 1, test_case.bytes, sign_bit);
+        writeElement(vm.registers_, 3, 1, test_case.bytes, 2u);
+        if (test_case.lanes > 2)
+        {
+            writeElement(vm.registers_, 2, 2, test_case.bytes, sign_bit - 1u);
+            writeElement(vm.registers_, 3, 2, test_case.bytes, 2u);
+        }
+        if (test_case.lanes > 3)
+        {
+            writeElement(vm.registers_, 2, 3, test_case.bytes, 0u);
+            writeElement(vm.registers_, 3, 3, test_case.bytes, element_mask);
+        }
+
+        for (size_t byte = 0; byte < 16; ++byte)
+            vm.registers_.WriteVectorByte(4, byte, 0xA5u);
+
+        vm.LoadProgram(assembleVectorSource(
+            "vsetvli x6, x5, " + std::to_string(test_case.zimm) + "\\n"
+            "vmul.vv v4, v2, v3\\n"));
+        vm.Step();
+        vm.Step();
+
+        EXPECT_EQ(readElement(vm.registers_, 4, 0, test_case.bytes),
+                  (element_mask - 2u) & element_mask);
+        EXPECT_EQ(readElement(vm.registers_, 4, 1, test_case.bytes), 0u);
+        if (test_case.lanes > 2)
+            EXPECT_EQ(readElement(vm.registers_, 4, 2, test_case.bytes),
+                      (element_mask - 1u) & element_mask);
+        if (test_case.lanes > 3)
+            EXPECT_EQ(readElement(vm.registers_, 4, 3, test_case.bytes), 0u);
+
+        if (test_case.lanes < (128u / test_case.sew))
+        {
+            EXPECT_EQ(readElement(vm.registers_, 4, test_case.lanes, test_case.bytes), sentinel);
+            const size_t first_tail_byte = test_case.lanes * test_case.bytes;
+            for (size_t byte = first_tail_byte; byte < 16; ++byte)
+                EXPECT_EQ(vm.registers_.ReadVectorByte(4, byte), 0xA5u);
+        }
+    }
+}
+
+TEST(VectorExtension, MaskedVectorMultiplyPreservesInactiveAndTailElements)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 3);
+    vm.registers_.WriteVectorByte(0, 0, 0x05u);
+
+    const uint32_t lhs[] = {3u, 4u, 5u, 6u};
+    const uint32_t rhs[] = {2u, 3u, 4u, 5u};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(vm.registers_, 2, lane, 4, lhs[lane]);
+        writeElement(vm.registers_, 3, lane, 4, rhs[lane]);
+    }
+    for (size_t byte = 0; byte < 16; ++byte)
+        vm.registers_.WriteVectorByte(4, byte, 0xA5u);
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\\n"
+        "vmul.vv v4, v2, v3, v0.t\\n"));
+    vm.Step();
+    vm.Step();
+
+    EXPECT_EQ(readElement(vm.registers_, 4, 0, 4), 6u);
+    EXPECT_EQ(readElement(vm.registers_, 4, 1, 4), 0xA5A5A5A5u);
+    EXPECT_EQ(readElement(vm.registers_, 4, 2, 4), 20u);
+    EXPECT_EQ(readElement(vm.registers_, 4, 3, 4), 0xA5A5A5A5u);
+    for (size_t byte = 12; byte < 16; ++byte)
+        EXPECT_EQ(vm.registers_.ReadVectorByte(4, byte), 0xA5u);
+}
+
+TEST(VectorExtension, DotProductUsesVectorMultiplyAndReduction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 4);
+
+    const int32_t lhs[] = {2, -3, 4, 5};
+    const int32_t rhs[] = {6, 7, -2, 3};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(vm.registers_, 1, lane, 4, static_cast<uint32_t>(lhs[lane]));
+        writeElement(vm.registers_, 2, lane, 4, static_cast<uint32_t>(rhs[lane]));
+    }
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x6, x5, 16\\n"
+        "vmul.vv v3, v1, v2\\n"
+        "vredsum.vs v4, v3, v0\\n"));
+    vm.Step();
+    vm.Step();
+    vm.Step();
+
+    EXPECT_EQ(readElement(vm.registers_, 3, 0, 4), 12u);
+    EXPECT_EQ(readElement(vm.registers_, 3, 1, 4), static_cast<uint32_t>(-21));
+    EXPECT_EQ(readElement(vm.registers_, 3, 2, 4), static_cast<uint32_t>(-8));
+    EXPECT_EQ(readElement(vm.registers_, 3, 3, 4), 15u);
+    EXPECT_EQ(readElement(vm.registers_, 4, 0, 4), static_cast<uint32_t>(-2));
+}
