@@ -376,7 +376,7 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+    "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -945,6 +945,8 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vadd.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
     {"vadd.vi", {SyntaxType::O_VEC_C_VEC_C_I}},
+    {"vmv.x.s", {SyntaxType::O_GPR_C_VEC}},
+    {"vmv.s.x", {SyntaxType::O_VEC_C_GPR}},
     {"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmul.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
@@ -1149,7 +1151,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+        "vsetvli", "vadd.vv", "vadd.vx", "vadd.vi", "vsub.vv", "vmul.vv", "vmul.vx", "vmv.x.s", "vmv.s.x", "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -1501,6 +1503,10 @@ std::string disassemble(uint32_t instruction)
             default: break;
             }
         }
+        if (funct3 == 0b010 && funct6 == 0b010000 && vm && rs1 == 0)
+            return "vmv.x.s " + xr(rd) + ", " + vr(rs2);
+        if (funct3 == 0b110 && funct6 == 0b010000 && vm && rs2 == 0)
+            return "vmv.s.x " + vr(rd) + ", " + xr(rs1);
         if (funct3 == 0b100)
         {
             if (funct6 == 0b100101)
