@@ -1477,7 +1477,15 @@ std::string disassemble(uint32_t instruction)
     {
         if (funct3 == 0b111)
         {
-            const uint8_t zimm = (instruction >> 20) & 0x7F;
+            if (((instruction >> 30) & 0x3u) == 0x3u)
+            {
+                const uint16_t zimm = (instruction >> 20) & 0x3FFu;
+                return "vsetivli " + xr(rd) + ", " + std::to_string(rs1) + ", " +
+                       std::to_string(zimm);
+            }
+            if ((instruction >> 31) & 1u)
+                return "<unknown-vector-config>";
+            const uint16_t zimm = (instruction >> 20) & 0x7FFu;
             return "vsetvli " + xr(rd) + ", " + xr(rs1) + ", " + std::to_string(zimm);
         }
         const uint8_t funct6 = (instruction >> 26) & 0x3F;
