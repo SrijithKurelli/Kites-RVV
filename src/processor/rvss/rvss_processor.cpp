@@ -546,6 +546,10 @@ void RVSSProcessor::ExecuteVector()
         const uint8_t new_vl = static_cast<uint8_t>(std::min<uint64_t>(avl, vlmax));
         vector_sew_ = new_sew;
         vector_vl_ = new_vl;
+        vector_vtype_ = zimm;
+        registers_.WriteCsr(0xC20, vector_vl_);
+        registers_.WriteCsr(0xC21, vector_vtype_);
+        registers_.WriteCsr(0xC22, 16);
         if (vd != 0)
         {
             const uint64_t old_value = registers_.ReadGpr(vd);
@@ -1670,6 +1674,7 @@ void RVSSProcessor::DebugRun()
         current_delta_.old_pc = program_counter_;
         current_delta_.old_vector_sew = vector_sew_;
         current_delta_.old_vector_vl = vector_vl_;
+        current_delta_.old_vector_vtype = vector_vtype_;
         if (std::find(breakpoints_.begin(), breakpoints_.end(), program_counter_) ==
             breakpoints_.end())
         {
@@ -1685,6 +1690,7 @@ void RVSSProcessor::DebugRun()
             current_delta_.new_pc = program_counter_;
             current_delta_.new_vector_sew = vector_sew_;
             current_delta_.new_vector_vl = vector_vl_;
+            current_delta_.new_vector_vtype = vector_vtype_;
             // history_.push(current_delta_);
             undo_stack_.push(current_delta_);
             while (!redo_stack_.empty())
@@ -1736,6 +1742,7 @@ void RVSSProcessor::Step()
     current_delta_.old_pc = program_counter_;
     current_delta_.old_vector_sew = vector_sew_;
     current_delta_.old_vector_vl = vector_vl_;
+        current_delta_.old_vector_vtype = vector_vtype_;
     if (program_counter_ < program_size_)
     {
         Fetch();
@@ -1750,6 +1757,7 @@ void RVSSProcessor::Step()
         current_delta_.new_pc = program_counter_;
         current_delta_.new_vector_sew = vector_sew_;
         current_delta_.new_vector_vl = vector_vl_;
+            current_delta_.new_vector_vtype = vector_vtype_;
 
         // history_.push(current_delta_);
 
@@ -1859,6 +1867,9 @@ void RVSSProcessor::Undo()
     program_counter_ = last.old_pc;
     vector_sew_ = last.old_vector_sew;
     vector_vl_ = last.old_vector_vl;
+    vector_vtype_ = last.old_vector_vtype;
+    registers_.WriteCsr(0xC20, vector_vl_);
+    registers_.WriteCsr(0xC21, vector_vtype_);
     instructions_retired_--;
     cycle_s_--;
     std::cout << "Program Counter: " << program_counter_ << std::endl;
@@ -1938,6 +1949,9 @@ void RVSSProcessor::Redo()
     program_counter_ = next.new_pc;
     vector_sew_ = next.new_vector_sew;
     vector_vl_ = next.new_vector_vl;
+    vector_vtype_ = next.new_vector_vtype;
+    registers_.WriteCsr(0xC20, vector_vl_);
+    registers_.WriteCsr(0xC21, vector_vtype_);
     instructions_retired_++;
     cycle_s_++;
     DumpRegisters(globals::registers_dump_file_path, registers_);
@@ -1972,6 +1986,10 @@ void RVSSProcessor::Reset()
     csr_uimm_ = 0;
     vector_sew_ = 8;
     vector_vl_ = 0;
+    vector_vtype_ = 0;
+    registers_.WriteCsr(0xC20, 0);
+    registers_.WriteCsr(0xC21, 0);
+    registers_.WriteCsr(0xC22, 16);
     current_delta_.register_changes.clear();
     current_delta_.memory_changes.clear();
     current_delta_.old_pc = 0;
@@ -1980,6 +1998,8 @@ void RVSSProcessor::Reset()
     current_delta_.new_vector_sew = 8;
     current_delta_.old_vector_vl = 0;
     current_delta_.new_vector_vl = 0;
+    current_delta_.old_vector_vtype = 0;
+    current_delta_.new_vector_vtype = 0;
     undo_stack_ = std::stack<StepDelta>();
     redo_stack_ = std::stack<StepDelta>();
 }
