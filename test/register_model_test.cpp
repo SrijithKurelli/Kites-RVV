@@ -93,6 +93,10 @@ TEST(RegisterModelTest, VectorDecimalFormatsSignedMinimumValuesAtEightAndSixtyFo
     EXPECT_EQ(model.data(model.index(64, 2)).toString(),
               QString("[-128, 127, -1, 0, 0, 0, 0, -128, 0, 0, 0, 0, 0, 0, 0, 0]"));
 
+    // Rebuild the full 64-bit lane independently: 0x8000000000000000.
+    bytes.fill(0);
+    bytes[7] = 0x80;
+    registers.WriteVector(0, bytes);
     model.setVectorElementWidth(64);
     EXPECT_EQ(model.data(model.index(64, 2)).toString(),
               QString("[-9223372036854775808, 0]"));
