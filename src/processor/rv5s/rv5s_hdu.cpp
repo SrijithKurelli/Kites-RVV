@@ -42,8 +42,10 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     const uint8_t funct6 = (instruction >> 26) & 0x3Fu;
     const bool vector_opcode = opcode == 0b1010111;
     const bool vector_config = vector_opcode && funct3 == 0b111;
+    const bool vector_immediate_config = vector_config && ((instruction >> 30) == 0b11);
     const bool vector_scalar = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
-    const bool read_gpr_rs1 = !vector_opcode || vector_config || vector_scalar;
+    const bool read_gpr_rs1 = !vector_opcode ||
+                              (vector_config && !vector_immediate_config) || vector_scalar;
     const bool read_gpr_rs2 = !vector_opcode;
 
     // GPR Source Registers (rs1/rs2 fields)
