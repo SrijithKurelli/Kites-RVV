@@ -108,6 +108,16 @@ struct EX_MEM_Register
     bool vector_write {false};
     uint8_t prev_vector_rd {0};
     bool prev_vector_write {false};
+    bool vector_memory {false};
+    bool vector_memory_load {false};
+    uint8_t vector_memory_reg {0};
+    uint8_t vector_memory_element_bytes {0};
+    uint8_t vector_memory_vl {0};
+    bool vector_memory_vm {true};
+    uint64_t vector_memory_base {0};
+    int64_t vector_memory_stride {0};
+    std::array<uint8_t, 16> vector_memory_data{};
+    std::array<uint8_t, 16> vector_memory_mask{};
     // Branching info calculated in EX stage
     bool     branch_taken      {false};
     bool     prev_branch_taken {false};  // we'll use this for hightlighting purposes
@@ -144,6 +154,16 @@ struct EX_MEM_Register
         vector_write = false;
         prev_vector_rd = 0;
         prev_vector_write = false;
+        vector_memory = false;
+        vector_memory_load = false;
+        vector_memory_reg = 0;
+        vector_memory_element_bytes = 0;
+        vector_memory_vl = 0;
+        vector_memory_vm = true;
+        vector_memory_base = 0;
+        vector_memory_stride = 0;
+        vector_memory_data.fill(0);
+        vector_memory_mask.fill(0);
 
         branch_taken      = false;
         prev_branch_taken = false;

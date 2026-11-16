@@ -285,7 +285,8 @@ void RV5StageProcessorHF::pipeline_fetch()
 
 void RV5StageProcessorHF::pipeline_execute()
 {
-    if ((id_ex_reg_.instruction & 0x7Fu) == 0x57u)
+    if ((id_ex_reg_.instruction & 0x7Fu) == 0x57u ||
+        isVectorMemoryInstruction(id_ex_reg_.instruction))
     {
         const auto vector = execute_vector_instruction(true);
         ex_mem_reg_.prev_reg_write = ex_mem_reg_.reg_write;
@@ -301,6 +302,16 @@ void RV5StageProcessorHF::pipeline_execute()
         ex_mem_reg_.vector_result = vector.vector_result;
         ex_mem_reg_.vector_rd = vector.vector_rd;
         ex_mem_reg_.vector_write = vector.vector_write;
+        ex_mem_reg_.vector_memory = vector.vector_memory;
+        ex_mem_reg_.vector_memory_load = vector.vector_memory_load;
+        ex_mem_reg_.vector_memory_reg = vector.vector_memory_reg;
+        ex_mem_reg_.vector_memory_element_bytes = vector.vector_memory_element_bytes;
+        ex_mem_reg_.vector_memory_vl = vector.vector_memory_vl;
+        ex_mem_reg_.vector_memory_vm = vector.vector_memory_vm;
+        ex_mem_reg_.vector_memory_base = vector.vector_memory_base;
+        ex_mem_reg_.vector_memory_stride = vector.vector_memory_stride;
+        ex_mem_reg_.vector_memory_data = vector.vector_memory_data;
+        ex_mem_reg_.vector_memory_mask = vector.vector_memory_mask;
         ex_mem_reg_.rd = id_ex_reg_.rd;
         ex_mem_reg_.frd = id_ex_reg_.frd;
         ex_mem_reg_.reg2_data = id_ex_reg_.reg2_data;
@@ -318,6 +329,8 @@ void RV5StageProcessorHF::pipeline_execute()
         return;
     }
 
+    ex_mem_reg_.vector_memory = false;
+    ex_mem_reg_.vector_memory_load = false;
     uint32_t instruction = id_ex_reg_.instruction;
     bool overflow = false;
     uint64_t alu_result = 0;

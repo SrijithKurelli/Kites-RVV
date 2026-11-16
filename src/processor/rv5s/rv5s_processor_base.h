@@ -32,6 +32,16 @@ struct RV5VectorExecutionResult
     uint8_t vector_rd {0};
     bool vector_write {false};
     uint64_t scalar_result {0};
+    bool vector_memory {false};
+    bool vector_memory_load {false};
+    uint8_t vector_memory_reg {0};
+    uint8_t vector_memory_element_bytes {0};
+    uint8_t vector_memory_vl {0};
+    bool vector_memory_vm {true};
+    uint64_t vector_memory_base {0};
+    int64_t vector_memory_stride {0};
+    std::array<uint8_t, 16> vector_memory_data{};
+    std::array<uint8_t, 16> vector_memory_mask{};
 };
 
 class RV5StageVM_Base : public ProcessorBase
@@ -55,6 +65,14 @@ class RV5StageVM_Base : public ProcessorBase
     uint8_t vectorVl() const noexcept { return vector_vl_; }
 
   protected:
+    static bool isVectorMemoryInstruction(uint32_t instruction) noexcept
+    {
+        const uint8_t opcode = instruction & 0x7Fu;
+        const uint8_t width = (instruction >> 12) & 0x7u;
+        return (opcode == 0x07u || opcode == 0x27u) &&
+               (width == 0b000u || width == 0b101u ||
+                width == 0b110u || width == 0b111u);
+    }
     // Pipeline Registers
     IF_ID_Register if_id_reg_;
     ID_EX_Register id_ex_reg_;

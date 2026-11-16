@@ -215,7 +215,7 @@ void RV5StageProcessorNHF::pipeline_execute()
     bool is_d_instruction = instruction_set::isDInstruction(instruction);
 
     RV5VectorExecutionResult vector_execution;
-    if ((instruction & 0x7Fu) == 0x57u)
+    if ((instruction & 0x7Fu) == 0x57u || isVectorMemoryInstruction(instruction))
     {
         vector_execution = execute_vector_instruction(true);
         alu_result = vector_execution.scalar_result;
@@ -350,6 +350,16 @@ void RV5StageProcessorNHF::pipeline_execute()
     ex_mem_reg_.vector_result = vector_execution.vector_result;
     ex_mem_reg_.vector_rd = vector_execution.vector_rd;
     ex_mem_reg_.vector_write = vector_execution.vector_write;
+    ex_mem_reg_.vector_memory = vector_execution.vector_memory;
+    ex_mem_reg_.vector_memory_load = vector_execution.vector_memory_load;
+    ex_mem_reg_.vector_memory_reg = vector_execution.vector_memory_reg;
+    ex_mem_reg_.vector_memory_element_bytes = vector_execution.vector_memory_element_bytes;
+    ex_mem_reg_.vector_memory_vl = vector_execution.vector_memory_vl;
+    ex_mem_reg_.vector_memory_vm = vector_execution.vector_memory_vm;
+    ex_mem_reg_.vector_memory_base = vector_execution.vector_memory_base;
+    ex_mem_reg_.vector_memory_stride = vector_execution.vector_memory_stride;
+    ex_mem_reg_.vector_memory_data = vector_execution.vector_memory_data;
+    ex_mem_reg_.vector_memory_mask = vector_execution.vector_memory_mask;
     ex_mem_reg_.rd = id_ex_reg_.rd;
     ex_mem_reg_.frd = id_ex_reg_.frd;
     // NOTE: reg2_data and freg2_data are set inside the integer/FP execute

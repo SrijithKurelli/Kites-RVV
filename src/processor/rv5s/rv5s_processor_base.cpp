@@ -1,7 +1,12 @@
 #include "common/debug_colors.h"
 #include "common/instructions.h"
 #include "processor/rv5s/rv5s_processor_base.h"
+#include "config/config.h"
+#include <limits>
+#include <stdexcept>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace Kites
 {
@@ -262,6 +267,15 @@ void RV5StageVM_Base::pipeline_decode()
     id_ex_reg_.mem_write  = control_unit_.GetMemWrite();
     id_ex_reg_.mem_to_reg = control_unit_.GetMemToReg();
     id_ex_reg_.alu_op     = control_unit_.GetAluOp();
+    if (isVectorMemoryInstruction(instruction))
+    {
+        id_ex_reg_.reg_write = false;
+        id_ex_reg_.freg_write = false;
+        id_ex_reg_.mem_read = false;
+        id_ex_reg_.mem_write = false;
+        id_ex_reg_.mem_to_reg = false;
+        id_ex_reg_.alu_src = false;
+    }
 }
 
 
@@ -270,7 +284,9 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     constexpr uint8_t kVectorOpcode = 0x57u;
     RV5VectorExecutionResult execution;
     const uint32_t instruction = id_ex_reg_.instruction;
-    if ((instruction & 0x7Fu) != kVectorOpcode)
+    const uint8_t opcode = instruction & 0x7Fu;
+    const bool vector_memory = isVectorMemoryInstruction(instruction);
+    if (opcode != kVectorOpcode && !vector_memory)
         throw std::runtime_error("Invalid vector instruction in RV5 pipeline");
 
     const uint8_t funct3 = (instruction >> 12) & 0x7u;
@@ -279,6 +295,62 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     const uint8_t rs1 = (instruction >> 15) & 0x1Fu;
     const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
     const bool vm = ((instruction >> 25) & 1u) != 0;
+    const auto read_vector = [&](uint8_t reg)
+    {
+        if (forwarding_enabled)
+        {
+            if (ex_mem_reg_.vector_write && ex_mem_reg_.vector_rd == reg)
+                return ex_mem_reg_.vector_result;
+            if (mem_wb_reg_.prev_vector_write && mem_wb_reg_.prev_vector_rd == reg)
+                return mem_wb_reg_.prev_vector_result;
+        }
+        return registers_.ReadVector(reg);
+    };
+
+    if (vector_memory)
+    {
+        const uint8_t nf = (instruction >> 29) & 0x7u;
+        const bool mew = ((instruction >> 28) & 1u) != 0;
+        const uint8_t mop = (instruction >> 26) & 0x3u;
+        const uint8_t lumop_or_sumop = (instruction >> 20) & 0x1Fu;
+        const bool strided = mop == 0b10;
+        const bool load = opcode == 0x07u;
+        if (nf != 0 || mew || (mop != 0 && !strided) ||
+            (!strided && lumop_or_sumop != 0))
+            throw std::runtime_error(
+                "RV5 supports only unit-stride and strided one-field vector memory operations");
+        size_t element_bytes = 0;
+        switch (funct3)
+        {
+        case 0b000: element_bytes = 1; break;
+        case 0b101: element_bytes = 2; break;
+        case 0b110: element_bytes = 4; break;
+        case 0b111: element_bytes = 8; break;
+        default: throw std::runtime_error("Unsupported RV5 vector memory element width");
+        }
+        if (element_bytes * 8u != vector_sew_)
+            throw std::runtime_error("RV5 vector memory EEW must match the configured SEW");
+        if (!vm && vd == 0)
+            throw std::runtime_error("Masked vector memory data/destination register cannot overlap v0");
+        execution.vector_memory = true;
+        execution.vector_memory_load = load;
+        execution.vector_memory_reg = vd;
+        execution.vector_memory_element_bytes = static_cast<uint8_t>(element_bytes);
+        execution.vector_memory_vl = vector_vl_;
+        execution.vector_memory_vm = vm;
+        execution.vector_memory_base = forwarding_enabled
+            ? forward_gpr(rs1, id_ex_reg_.reg1_data) : id_ex_reg_.reg1_data;
+        execution.vector_memory_stride = strided
+            ? static_cast<int64_t>(forwarding_enabled
+                  ? forward_gpr(vs2, id_ex_reg_.reg2_data) : id_ex_reg_.reg2_data)
+            : static_cast<int64_t>(element_bytes);
+        execution.vector_memory_data = read_vector(vd);
+        execution.vector_memory_mask = read_vector(0);
+        execution.vector_write = load;
+        execution.vector_rd = vd;
+        execution.vector_result = execution.vector_memory_data;
+        return execution;
+    }
 
     if (funct3 == 0b111)
     {
@@ -323,17 +395,6 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
 
     const bool vector_popcount_mask =
         funct3 == 0b010 && funct6 == 0b010000 && rs1 == 0b10000;
-    const auto read_vector = [&](uint8_t reg)
-    {
-        if (forwarding_enabled)
-        {
-            if (ex_mem_reg_.vector_write && ex_mem_reg_.vector_rd == reg)
-                return ex_mem_reg_.vector_result;
-            if (mem_wb_reg_.prev_vector_write && mem_wb_reg_.prev_vector_rd == reg)
-                return mem_wb_reg_.prev_vector_result;
-        }
-        return registers_.ReadVector(reg);
-    };
 
     const auto predicate = read_vector(0);
     const auto lane_is_active = [&](size_t lane)
@@ -826,6 +887,103 @@ void RV5StageVM_Base::pipeline_memory()
 
     bool is_F_Instruction = instruction_set::isFInstruction(mem_wb_reg_.instruction);
     bool is_D_Instruction = instruction_set::isDInstruction(mem_wb_reg_.instruction);
+
+    if (ex_mem_reg_.vector_memory)
+    {
+        const size_t element_bytes = ex_mem_reg_.vector_memory_element_bytes;
+        if (element_bytes != 1 && element_bytes != 2 &&
+            element_bytes != 4 && element_bytes != 8)
+            throw std::runtime_error("Invalid vector memory element width in MEM");
+        const uint64_t memory_size = vm_config::config.getMemorySize();
+        const auto lane_address = [&](size_t lane) -> uint64_t
+        {
+            const uint64_t lane_index = static_cast<uint64_t>(lane);
+            const int64_t stride = ex_mem_reg_.vector_memory_stride;
+            uint64_t address = ex_mem_reg_.vector_memory_base;
+            if (stride >= 0)
+            {
+                const uint64_t magnitude = static_cast<uint64_t>(stride);
+                if (lane_index != 0 && magnitude > std::numeric_limits<uint64_t>::max() / lane_index)
+                    throw std::out_of_range("Vector memory address overflow");
+                const uint64_t offset = magnitude * lane_index;
+                if (address > std::numeric_limits<uint64_t>::max() - offset)
+                    throw std::out_of_range("Vector memory address overflow");
+                address += offset;
+            }
+            else
+            {
+                const uint64_t magnitude = static_cast<uint64_t>(-(stride + 1)) + 1u;
+                if (lane_index != 0 && magnitude > std::numeric_limits<uint64_t>::max() / lane_index)
+                    throw std::out_of_range("Vector memory address underflow");
+                const uint64_t offset = magnitude * lane_index;
+                if (address < offset)
+                    throw std::out_of_range("Vector memory address underflow");
+                address -= offset;
+            }
+            if (address > memory_size || element_bytes > memory_size - address)
+                throw std::out_of_range("Active vector memory lane is out of range");
+            return address;
+        };
+        const auto lane_is_active = [&](size_t lane)
+        {
+            return ex_mem_reg_.vector_memory_vm ||
+                   ((ex_mem_reg_.vector_memory_mask[lane / 8u] >> (lane % 8u)) & 1u) != 0;
+        };
+        struct PendingVectorLane
+        {
+            size_t lane;
+            uint64_t address;
+            std::vector<uint8_t> old_bytes;
+            std::vector<uint8_t> new_bytes;
+        };
+        std::vector<PendingVectorLane> pending;
+        pending.reserve(ex_mem_reg_.vector_memory_vl);
+        for (size_t lane = 0; lane < ex_mem_reg_.vector_memory_vl; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            PendingVectorLane item{lane, lane_address(lane), {}, {}};
+            item.new_bytes.reserve(element_bytes);
+            if (ex_mem_reg_.vector_memory_load)
+            {
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    item.new_bytes.push_back(memory_controller_.readByte(item.address + byte));
+            }
+            else
+            {
+                item.old_bytes.reserve(element_bytes);
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                {
+                    item.old_bytes.push_back(memory_controller_.peekByte(item.address + byte));
+                    item.new_bytes.push_back(
+                        ex_mem_reg_.vector_memory_data[lane * element_bytes + byte]);
+                }
+            }
+            pending.push_back(std::move(item));
+        }
+        if (ex_mem_reg_.vector_memory_load)
+        {
+            auto loaded = ex_mem_reg_.vector_memory_data;
+            for (const auto &item : pending)
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    loaded[item.lane * element_bytes + byte] = item.new_bytes[byte];
+            mem_wb_reg_.vector_rd = ex_mem_reg_.vector_memory_reg;
+            mem_wb_reg_.vector_result = loaded;
+            mem_wb_reg_.vector_write = true;
+        }
+        else
+        {
+            for (const auto &item : pending)
+            {
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    memory_controller_.writeByte(item.address + byte, item.new_bytes[byte]);
+                if (item.old_bytes != item.new_bytes)
+                    current_delta_.memory_changes.push_back(
+                        {item.address, item.old_bytes, item.new_bytes});
+            }
+        }
+        return;
+    }
 
     // Memory Access
     if (ex_mem_reg_.mem_read)

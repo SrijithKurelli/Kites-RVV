@@ -41,6 +41,9 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     const uint8_t funct3 = (instruction >> 12) & 0x7u;
     const uint8_t funct6 = (instruction >> 26) & 0x3Fu;
     const bool vector_opcode = opcode == 0b1010111;
+    const bool vector_memory = (opcode == 0x07u || opcode == 0x27u) &&
+                               (funct3 == 0b000 || funct3 == 0b101 ||
+                                funct3 == 0b110 || funct3 == 0b111);
     const bool vector_config = vector_opcode && funct3 == 0b111;
     const bool vector_immediate_config = vector_config && ((instruction >> 30) == 0b11);
     const bool vector_scalar = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
@@ -76,12 +79,12 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     // --- 3. Check for FPR Hazard (Source writes FPR, Dependent reads FPR) ---
     // Note: FPR f0 is NOT hardwired to zero (unlike GPR x0), so no frd != 0 check needed.
     // Two-cycle hazard: current EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_two_cycle = !vector_opcode &&
+    bool fpr_hazard_two_cycle = !vector_opcode && !vector_memory &&
         (ex_mem_reg.freg_write) && (ex_mem_reg.frd == if_id_frs1 || ex_mem_reg.frd == if_id_frs2 ||
                                     ex_mem_reg.frd == if_id_frs3);
 
     // One-cycle hazard: previous EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_one_cycle = !vector_opcode &&
+    bool fpr_hazard_one_cycle = !vector_opcode && !vector_memory &&
         (ex_mem_reg.prev_freg_write) &&
         (ex_mem_reg.prev_frd == if_id_frs1 || ex_mem_reg.prev_frd == if_id_frs2 ||
          ex_mem_reg.prev_frd == if_id_frs3);
@@ -97,31 +100,34 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     // Vector ALU forwarding is implemented by the forwarding-enabled variants.
     // The no-forwarding H_NF configuration waits until pending vector writes
     // reach WB before decoding a dependent instruction.
-    if (vector_opcode && !vector_config && !is_forwarding_enabled)
+    if (((vector_opcode && !vector_config) || vector_memory) && !is_forwarding_enabled)
     {
         const uint8_t vd = (instruction >> 7) & 0x1Fu;
         const uint8_t vs1 = (instruction >> 15) & 0x1Fu;
         const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
         const bool vm = ((instruction >> 25) & 1u) != 0;
+        const bool memory_load = vector_memory && opcode == 0x07u;
+        const bool memory_store = vector_memory && opcode == 0x27u;
         const bool vector_popcount_mask =
-            funct3 == 0b010 && funct6 == 0b010000 && vs1 == 0b10000;
+            vector_opcode && funct3 == 0b010 && funct6 == 0b010000 && vs1 == 0b10000;
         const bool vector_reduction =
-            funct3 == 0b010 &&
+            vector_opcode && funct3 == 0b010 &&
             (funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
              funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111);
         const bool vector_unary =
-            funct3 == 0b010 && funct6 == 0b010010 &&
+            vector_opcode && funct3 == 0b010 && funct6 == 0b010010 &&
             (vs1 == 0b01100 || vs1 == 0b01101 || vs1 == 0b01110);
-        const bool vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
-        const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
-        const bool reads_vs1_vector = funct3 == 0b000 || vector_reduction || vector_multiply;
-        const bool reads_vs2_vector = funct3 == 0b000 || vector_reduction ||
-                                      vector_unary || vector_multiply ||
-                                      vector_scalar_multiply || vector_popcount_mask;
+        const bool vector_multiply = vector_opcode && funct3 == 0b010 && funct6 == 0b100101;
+        const bool vector_scalar_multiply = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
+        const bool reads_vs1_vector = vector_opcode &&
+            (funct3 == 0b000 || vector_reduction || vector_multiply);
+        const bool reads_vs2_vector = memory_store || vector_popcount_mask ||
+            (vector_opcode && (funct3 == 0b000 || vector_reduction ||
+                               vector_unary || vector_multiply || vector_scalar_multiply));
         const bool reads_mask = !vm;
-        const bool writes_vector = !vector_popcount_mask;
+        const bool writes_vector = memory_load || (vector_opcode && !vector_popcount_mask);
         const bool current_raw = ex_mem_reg.vector_write && reads_vs2_vector &&
-                                 ex_mem_reg.vector_rd == vs2;
+                                 ex_mem_reg.vector_rd == (vector_memory ? vd : vs2);
         const bool current_raw_vs1 = ex_mem_reg.vector_write && reads_vs1_vector &&
                                      ex_mem_reg.vector_rd == vs1;
         const bool current_raw_mask = ex_mem_reg.vector_write && reads_mask &&
@@ -129,19 +135,22 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
         const bool current_waw = ex_mem_reg.vector_write && writes_vector &&
                                  ex_mem_reg.vector_rd == vd;
         const bool previous_raw = ex_mem_reg.prev_vector_write && reads_vs2_vector &&
-                                  ex_mem_reg.prev_vector_rd == vs2;
+                                  ex_mem_reg.prev_vector_rd == (vector_memory ? vd : vs2);
         const bool previous_raw_vs1 = ex_mem_reg.prev_vector_write && reads_vs1_vector &&
                                       ex_mem_reg.prev_vector_rd == vs1;
         const bool previous_raw_mask = ex_mem_reg.prev_vector_write && reads_mask &&
                                        ex_mem_reg.prev_vector_rd == 0;
         const bool previous_waw = ex_mem_reg.prev_vector_write && writes_vector &&
                                   ex_mem_reg.prev_vector_rd == vd;
-
         if (current_raw || current_raw_vs1 || current_raw_mask || current_waw)
             return STALL_TWO_CYCLES;
         if (previous_raw || previous_raw_vs1 || previous_raw_mask || previous_waw)
             return STALL_ONE_CYCLE;
     }
+
+    if (is_forwarding_enabled && ex_mem_reg.vector_memory_load &&
+        (vector_opcode || vector_memory))
+        return STALL_ONE_CYCLE;
 
     if (is_forwarding_enabled)
     {
