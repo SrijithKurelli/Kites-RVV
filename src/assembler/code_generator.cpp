@@ -411,7 +411,7 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
                 const uint32_t vs2 = rs1;
                 const uint32_t vm = block.getImm() == "0" ? 0u : 1u;
                 code = (0b010000u << 26) | (vm << 25) | (vs2 << 20) |
-                       (0b10000u << 15) | (0b110u << 12) | (rd << 7) | 0x57u;
+                       (0b10000u << 15) | (0b010u << 12) | (rd << 7) | 0x57u;
             }
             else if (block.getOpcode() == "vclz.v" || block.getOpcode() == "vctz.v" ||
                      block.getOpcode() == "vcpop.v")
