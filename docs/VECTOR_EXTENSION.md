@@ -320,7 +320,8 @@ with masking, and active-address store preflight. Vector multiply tests cover OP
 low-bit wraparound at all four SEWs, scalar sign/boundary inputs, and
 masked/tail preservation. The 3x3 matrix test checks all nine output elements.
 The H_F pipeline tests cover masked dependent vector arithmetic, vector
-writeback undo/redo, and GPR forwarding into `vsetvli` and `vmul.vx`.
+writeback undo/redo, immediate and load-use GPR forwarding into `vsetvli`
+and `vmul.vx`, and all four SEWs with tail preservation.
 `test/register_model_test.cpp` checks vector display in signed decimal,
 zero-padded hexadecimal, grouped binary, and each supported element width.
 CI run #43842617996 passed the build, all 14 vector-folder assembly smoke

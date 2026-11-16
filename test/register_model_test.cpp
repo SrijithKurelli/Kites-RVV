@@ -76,3 +76,24 @@ TEST(RegisterModelTest, VectorElementWidthControlsLaneCountAndInterpretation)
     EXPECT_EQ(model.data(model.index(64, 2)).toString(),
               QString("[578437695752307201, 1157159078456920585]"));
 }
+
+TEST(RegisterModelTest, VectorDecimalFormatsSignedMinimumValuesAtEightAndSixtyFourBits)
+{
+    RegisterFile registers;
+    std::array<uint8_t, 16> bytes{};
+    bytes[0] = 0x80; // INT8_MIN
+    bytes[1] = 0x7f; // INT8_MAX
+    bytes[2] = 0xff; // -1
+    bytes[7] = 0x80; // INT64_MIN in lane 0 at 64-bit width
+    registers.WriteVector(0, bytes);
+
+    RegisterModel model(nullptr, &registers);
+    model.setDisplayBase(Base::Decimal);
+    model.setVectorElementWidth(8);
+    EXPECT_EQ(model.data(model.index(64, 2)).toString(),
+              QString("[-128, 127, -1, 0, 0, 0, 0, -128, 0, 0, 0, 0, 0, 0, 0, 0]"));
+
+    model.setVectorElementWidth(64);
+    EXPECT_EQ(model.data(model.index(64, 2)).toString(),
+              QString("[-9223372036854775808, 0]"));
+}

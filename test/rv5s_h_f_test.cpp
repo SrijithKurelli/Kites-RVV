@@ -129,6 +129,37 @@ std::array<int32_t, 4> unpackVector32(const std::array<uint8_t, 16> &bytes)
     }
     return values;
 }
+
+uint64_t readVectorLane(const std::array<uint8_t, 16> &bytes, size_t lane, int sew)
+{
+    const size_t elementBytes = static_cast<size_t>(sew / 8);
+    uint64_t value = 0;
+    for (size_t byte = 0; byte < elementBytes; ++byte)
+        value |= static_cast<uint64_t>(bytes[lane * elementBytes + byte]) << (8 * byte);
+    return value;
+}
+
+void writeVectorLane(std::array<uint8_t, 16> &bytes, size_t lane, int sew, uint64_t value)
+{
+    const size_t elementBytes = static_cast<size_t>(sew / 8);
+    for (size_t byte = 0; byte < elementBytes; ++byte)
+        bytes[lane * elementBytes + byte] = static_cast<uint8_t>((value >> (8 * byte)) & 0xffu);
+}
+
+std::array<uint8_t, 16> expectedVectorAdd(const std::array<uint8_t, 16> &lhs,
+                                          const std::array<uint8_t, 16> &rhs,
+                                          std::array<uint8_t, 16> destination,
+                                          int sew, size_t vl)
+{
+    const uint64_t mask = sew == 64 ? UINT64_MAX : ((uint64_t{1} << sew) - 1u);
+    for (size_t lane = 0; lane < vl; ++lane)
+    {
+        const uint64_t sum = (readVectorLane(lhs, lane, sew) +
+                              readVectorLane(rhs, lane, sew)) & mask;
+        writeVectorLane(destination, lane, sew, sum);
+    }
+    return destination;
+}
 } // namespace
 
 TEST(RV5StageVM_H_F_TEST, vectorSubsetExecutesWithMaskAndVectorDependencyStalls)
@@ -201,6 +232,60 @@ TEST(RV5StageVM_H_F_TEST, vectorConfigAndScalarMultiplyForwardGprOperands)
     // vsetvli and is consumed by the next ADDI; x6 supplies vmul.vx directly.
     EXPECT_EQ(vm.registers_.ReadGpr(5), 4u);
     EXPECT_EQ(vm.registers_.ReadGpr(8), 5u);
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(3)),
+              (std::array<int32_t, 4>{3, -6, 9, -12}));
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(4)),
+              (std::array<int32_t, 4>{13, 4, 19, -2}));
+}
+
+TEST(RV5StageVM_H_F_TEST, vectorArithmeticCoversAllSupportedSEWsAndPreservesTails)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+
+    std::array<uint8_t, 16> lhs{};
+    std::array<uint8_t, 16> rhs{};
+    std::array<uint8_t, 16> initial{};
+    for (size_t i = 0; i < 16; ++i)
+    {
+        lhs[i] = static_cast<uint8_t>(0xf0u + i);
+        rhs[i] = static_cast<uint8_t>(0x20u + i);
+    }
+    initial.fill(0xa5u);
+
+    vm.registers_.WriteVector(1, lhs);
+    vm.registers_.WriteVector(2, rhs);
+    vm.registers_.WriteVector(3, initial);
+    vm.registers_.WriteVector(4, initial);
+    vm.registers_.WriteVector(5, initial);
+    vm.registers_.WriteVector(6, initial);
+
+    const auto program = assemble("../examples/vector/vector_pipeline_hf_all_sew.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 2u);
+    EXPECT_EQ(vm.registers_.ReadVector(3), expectedVectorAdd(lhs, rhs, initial, 8, 16));
+    EXPECT_EQ(vm.registers_.ReadVector(4), expectedVectorAdd(lhs, rhs, initial, 16, 8));
+    EXPECT_EQ(vm.registers_.ReadVector(5), expectedVectorAdd(lhs, rhs, initial, 32, 4));
+    EXPECT_EQ(vm.registers_.ReadVector(6), expectedVectorAdd(lhs, rhs, initial, 64, 2));
+}
+
+TEST(RV5StageVM_H_F_TEST, vectorConfigAndScalarMultiplyHandleLoadUseForwarding)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    vm.registers_.WriteVector(1, packVector32({1, -2, 3, -4}));
+    vm.registers_.WriteVector(2, packVector32({10, 10, 10, 10}));
+
+    const auto program = assemble("../examples/vector/vector_pipeline_hf_load_forwarding.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    // Both vsetvli's AVL and vmul.vx's scalar source come from immediately
+    // preceding loads, so the H_F load-use stall and MEM/WB forwarding paths
+    // must deliver the correct values.
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 4u);
     EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(3)),
               (std::array<int32_t, 4>{3, -6, 9, -12}));
     EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(4)),

@@ -126,10 +126,11 @@ forms.
 Twelve general RVSS assembly examples under `examples/vector/` provide
 load-compute-store, comparison/count, masked-memory, average, selected
 bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
-cross-product, and 2x2/3x3 matrix-multiplication workflows. Three additional
+cross-product, and 2x2/3x3 matrix-multiplication workflows. Five additional
 H_F pipeline test fixtures exercise masked vector dependency stalls,
-vector writeback undo/redo, and GPR forwarding into `vsetvli` and `vmul.vx`;
-the unit tests seed their vector-register inputs.
+vector writeback undo/redo, immediate and load-use GPR forwarding into
+`vsetvli` and `vmul.vx`, and all supported SEWs with tail preservation.
+The unit tests seed their vector-register inputs.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.

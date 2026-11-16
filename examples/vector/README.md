@@ -47,6 +47,8 @@ standalone result demonstrations.
 | `vector_pipeline_hf_subset.s` | Masked `vadd.vv`, dependent `vmul.vv` / `vsub.vv`, and vector dependency stalls. |
 | `vector_pipeline_hf_undo.s` | Vector writeback through MEM/WB and vector-register undo/redo. |
 | `vector_pipeline_hf_gpr_forwarding.s` | GPR AVL forwarding into `vsetvli`, forwarding of the returned VL to an integer instruction, and scalar GPR forwarding into `vmul.vx`, followed by a vector dependency. |
+| `vector_pipeline_hf_all_sew.s` | H_F vector addition at SEW=8/16/32/64 with tail-undisturbed destination checks. |
+| `vector_pipeline_hf_load_forwarding.s` | Load-use forwarding of AVL into `vsetvli` and scalar operand into `vmul.vx`. |
 
 These programs are included in the automated example assembly/smoke checks.
 The regular RVSS examples exercise the broader documented subset; H_F pipeline

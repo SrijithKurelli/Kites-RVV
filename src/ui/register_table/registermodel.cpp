@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QPalette>
 #include <QStringList>
+#include <limits>
 
 namespace Kites
 {
@@ -33,9 +34,23 @@ QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int e
         {
         case Base::Decimal:
         {
-            int64_t signedValue = static_cast<int64_t>(raw);
-            if (elementWidth < 64 && (raw & (uint64_t{1} << (elementWidth - 1))))
-                signedValue = static_cast<int64_t>(raw | ~mask);
+            const uint64_t signBit = uint64_t{1} << (elementWidth - 1);
+            int64_t signedValue = 0;
+            if ((raw & signBit) == 0)
+            {
+                signedValue = static_cast<int64_t>(raw);
+            }
+            else
+            {
+                // Convert two's-complement magnitude first. This avoids an
+                // out-of-range uint64_t -> int64_t conversion for negative
+                // lanes, including INT64_MIN.
+                const uint64_t magnitude = ((~raw) & mask) + 1u;
+                if (magnitude == (uint64_t{1} << 63))
+                    signedValue = std::numeric_limits<int64_t>::min();
+                else
+                    signedValue = -static_cast<int64_t>(magnitude);
+            }
             elements.push_back(QString::number(signedValue));
             break;
         }
