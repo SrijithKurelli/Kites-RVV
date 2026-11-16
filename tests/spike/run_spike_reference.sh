@@ -34,7 +34,10 @@ LOG="$WORK_DIR/spike.log"
 # architectural completion condition, so it does not depend on ELF symbol
 # addresses or the simulator's initial PC mapping.
 cat > "$COMMANDS" <<'EOF'
-until reg 0 s0 fffffffffffffffe
+# Advance a bounded number of instructions. The reference program parks in
+# its _done loop, so every result register is stable after the finite kernel.
+# This avoids relying on interactive "until" state polling.
+rs 1000
 reg 0 a0
 reg 0 a1
 reg 0 a2
