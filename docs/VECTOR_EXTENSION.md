@@ -211,6 +211,10 @@ introduced.
   using `vmul.vv` followed by `vredsum.vs`; each scalar result is stored
   using the existing vector store path. The example output is
   `[[19,22],[43,50]]`.
+- `vector_matrix_multiply_3x3.s` extends the same composition to 3x3 matrices:
+  it loads three rows and three columns, computes nine dot products using
+  `vmul.vv` + `vredsum.vs`, and stores the result in row-major order. Its
+  example output is `[[30,24,18],[84,69,54],[138,114,90]]`.
 
 These are SEW=32 integer demonstrations, not a general matrix library or an
 overflow-safe arbitrary-precision implementation.
@@ -231,6 +235,7 @@ The repository includes end-to-end assembly examples in `examples/vector/`:
 - `vector_immediate_config.s` — immediate AVL configuration using `vsetivli`.
 - `vector_cross_product.s` — 3D cross product using two `vmul.vv` operations and `vsub.vv`.
 - `vector_matrix_multiply_2x2.s` — 2x2 matrix multiplication using vector multiplication and sum reductions.
+- `vector_matrix_multiply_3x3.s` — 3x3 matrix multiplication using nine vector dot products.
 
 See `examples/vector/README.md` for commands and expected results. The separate abstract timing assumptions and CLI are documented in `docs/VECTOR_PERFORMANCE_MODEL.md`. A focused independent Spike comparison is described in `docs/SPIKE_REFERENCE.md`.
 

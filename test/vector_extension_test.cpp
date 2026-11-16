@@ -1601,6 +1601,57 @@ TEST(VectorExtension, MatrixMultiply2x2UsesVectorMultiplyAndReduction)
 }
 
 
+TEST(VectorExtension, MatrixMultiply3x3UsesVectorMultiplyAndReduction)
+{
+    Kites::setupVmStateDirectory();
+    Kites::RVSSProcessor vm;
+    vm.registers_.WriteGpr(5, 3);
+    vm.registers_.WriteGpr(6, 1);
+
+    const int32_t a[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    const int32_t b_columns[3][3] = {{9, 6, 3}, {8, 5, 2}, {7, 4, 1}};
+    for (size_t lane = 0; lane < 3; ++lane)
+    {
+        for (size_t row = 0; row < 3; ++row)
+            writeElement(vm.registers_, row + 1, lane, 4,
+                         static_cast<uint32_t>(a[row][lane]));
+        for (size_t column = 0; column < 3; ++column)
+            writeElement(vm.registers_, column + 4, lane, 4,
+                         static_cast<uint32_t>(b_columns[column][lane]));
+    }
+
+    vm.LoadProgram(assembleVectorSource(
+        "vsetvli x14, x5, 16\\n"
+        "vmul.vv v7, v1, v4\\n"
+        "vredsum.vs v8, v7, v0\\n"
+        "vmul.vv v7, v1, v5\\n"
+        "vredsum.vs v9, v7, v0\\n"
+        "vmul.vv v7, v1, v6\\n"
+        "vredsum.vs v10, v7, v0\\n"
+        "vmul.vv v7, v2, v4\\n"
+        "vredsum.vs v11, v7, v0\\n"
+        "vmul.vv v7, v2, v5\\n"
+        "vredsum.vs v12, v7, v0\\n"
+        "vmul.vv v7, v2, v6\\n"
+        "vredsum.vs v13, v7, v0\\n"
+        "vmul.vv v7, v3, v4\\n"
+        "vredsum.vs v14, v7, v0\\n"
+        "vmul.vv v7, v3, v5\\n"
+        "vredsum.vs v15, v7, v0\\n"
+        "vmul.vv v7, v3, v6\\n"
+        "vredsum.vs v16, v7, v0\\n"));
+    for (int instruction = 0; instruction < 19; ++instruction)
+        vm.Step();
+
+    const int32_t expected[3][3] = {{30, 24, 18}, {84, 69, 54}, {138, 114, 90}};
+    size_t result_register = 8;
+    for (size_t row = 0; row < 3; ++row)
+        for (size_t column = 0; column < 3; ++column)
+            EXPECT_EQ(readElement(vm.registers_, result_register++, 0, 4),
+                      static_cast<uint32_t>(expected[row][column]));
+}
+
+
 TEST(VectorExtension, DisassemblerPreservesAllVsetvliImmediateBits)
 {
     const uint32_t instruction =

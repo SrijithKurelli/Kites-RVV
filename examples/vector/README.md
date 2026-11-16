@@ -15,6 +15,7 @@ root after building `kites-cli`:
 ./build/kites-cli examples/vector/vector_saxpy.s --vm rvss
 ./build/kites-cli examples/vector/vector_cross_product.s --vm rvss
 ./build/kites-cli examples/vector/vector_matrix_multiply_2x2.s --vm rvss
+./build/kites-cli examples/vector/vector_matrix_multiply_3x3.s --vm rvss
 ```
 
 Expected results:
@@ -32,6 +33,7 @@ Expected results:
 | `vector_saxpy.s` | With alpha=3, computes `3*x + y` and stores [13, 14, 39, 52]. |
 | `vector_cross_product.s` | Computes `[1,2,3] x [4,5,6]` and stores `[-3,6,-3]`. |
 | `vector_matrix_multiply_2x2.s` | Computes `[[1,2],[3,4]] x [[5,6],[7,8]]` and stores `[[19,22],[43,50]]` in row-major order. |
+| `vector_matrix_multiply_3x3.s` | Computes `[[1,2,3],[4,5,6],[7,8,9]] x [[9,8,7],[6,5,4],[3,2,1]]` and stores `[[30,24,18],[84,69,54],[138,114,90]]` in row-major order. |
 The average example uses a signed scalar `div`, which truncates toward zero.
 When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3. The multiply/dot-product and SAXPY examples use SEW=32 and VL=4; the cross-product uses VL=3; the 2x2 matrix kernel uses VL=2 for dot products and VL=1 for scalar-element stores.
 These programs exercise the implemented subset, not general RVV 1.0 programs. The separate abstract execution timing model is documented in `docs/VECTOR_PERFORMANCE_MODEL.md` and is available as `kites-vector-timing`.
