@@ -40,8 +40,8 @@ QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int e
             break;
         }
         case Base::Hexadecimal:
-            elements.push_back(QString("0x%1").arg(static_cast<qulonglong>(raw),
-                                                    elementWidth / 4, 16, QChar('0')).toUpper());
+            elements.push_back("0x" + QString("%1").arg(static_cast<qulonglong>(raw),
+                                                        elementWidth / 4, 16, QChar('0')).toUpper());
             break;
         case Base::Binary:
         {
