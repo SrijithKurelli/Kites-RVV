@@ -36,11 +36,10 @@ if [[ -z "$DONE_PC_HEX" ]]; then
     echo "Could not locate _done in the linked Spike reference ELF" >&2
     exit 2
 fi
-# Spike's debugger parses the address as a base-0 integer. Convert nm's
-# hexadecimal symbol to decimal explicitly instead of relying on parser defaults.
-DONE_PC=$((16#$DONE_PC_HEX))
+# Spike's debugger parses the final "until" operand as hexadecimal (base 16).
+# Keep nm's hexadecimal symbol value in that form; decimal conversion is incorrect.
 cat > "$COMMANDS" <<EOF
-until pc 0 $DONE_PC
+until pc 0 $DONE_PC_HEX
 reg 0 a0
 reg 0 a1
 reg 0 a2
