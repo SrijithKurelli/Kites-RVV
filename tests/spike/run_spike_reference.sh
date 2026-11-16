@@ -6,7 +6,7 @@ RISCV_CC="${RISCV_CC:-riscv64-unknown-elf-gcc}"
 RISCV_NM="${RISCV_NM:-riscv64-unknown-elf-nm}"
 SPIKE_BIN="${SPIKE_BIN:-spike}"
 
-for tool in "$RISCV_CC" "$RISCV_NM" "$SPIKE_BIN" grep awk; do
+for tool in "$RISCV_CC" "$RISCV_NM" "$SPIKE_BIN" grep awk timeout; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "Required tool not found: $tool" >&2
         exit 2
@@ -38,7 +38,7 @@ if [[ -z "$DONE_PC" ]]; then
 fi
 
 cat > "$COMMANDS" <<EOF
-until pc 0 $DONE_PC
+until pc 0 0x$DONE_PC
 reg 0 a0
 reg 0 a1
 reg 0 a2
@@ -52,7 +52,8 @@ quit
 EOF
 
 # Spike's V profile implies Zve64d and Zvl128b: ELEN=64, VLEN=128.
-"$SPIKE_BIN" --isa=rv64gcv -d --debug-cmd="$COMMANDS" "$ELF" >"$LOG" 2>&1
+timeout --signal=TERM --kill-after=5s 60s \
+    "$SPIKE_BIN" --isa=rv64gcv -d --debug-cmd="$COMMANDS" "$ELF" >"$LOG" 2>&1
 
 mapfile -t ACTUAL < <(grep -E '^0x[[:xdigit:]]{16}$' "$LOG" | tr '[:upper:]' '[:lower:]')
 EXPECTED=(
