@@ -94,22 +94,52 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     bool any_hazard_one_cycle = gpr_hazard_one_cycle || fpr_hazard_one_cycle;
     bool any_hazard = gpr_hazard || fpr_hazard;
 
-    // The selected H_F vector path does not forward 128-bit vector values.
-    // Conservatively insert one bubble for RAW, WAW, and implicit v0-mask hazards.
-    if (vector_opcode && !vector_config && ex_mem_reg.vector_write)
+    // Vector ALU forwarding is implemented by the forwarding-enabled variants.
+    // The no-forwarding H_NF configuration waits until pending vector writes
+    // reach WB before decoding a dependent instruction.
+    if (vector_opcode && !vector_config && !is_forwarding_enabled)
     {
         const uint8_t vd = (instruction >> 7) & 0x1Fu;
         const uint8_t vs1 = (instruction >> 15) & 0x1Fu;
         const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
         const bool vm = ((instruction >> 25) & 1u) != 0;
-        const bool reads_vs1_vector = funct3 == 0b000 ||
-                                      (funct3 == 0b010 && funct6 == 0b100101);
+        const bool vector_popcount_mask =
+            funct3 == 0b010 && funct6 == 0b010000 && vs1 == 0b10000;
+        const bool vector_reduction =
+            funct3 == 0b010 &&
+            (funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
+             funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111);
+        const bool vector_unary =
+            funct3 == 0b010 && funct6 == 0b010010 &&
+            (vs1 == 0b01100 || vs1 == 0b01101 || vs1 == 0b01110);
+        const bool vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
+        const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
+        const bool reads_vs1_vector = funct3 == 0b000 || vector_reduction || vector_multiply;
+        const bool reads_vs2_vector = funct3 == 0b000 || vector_reduction ||
+                                      vector_unary || vector_multiply ||
+                                      vector_scalar_multiply || vector_popcount_mask;
         const bool reads_mask = !vm;
-        const bool raw_hazard = ex_mem_reg.vector_rd == vs2 ||
-                                (reads_vs1_vector && ex_mem_reg.vector_rd == vs1) ||
-                                (reads_mask && ex_mem_reg.vector_rd == 0);
-        const bool waw_hazard = ex_mem_reg.vector_rd == vd;
-        if (raw_hazard || waw_hazard)
+        const bool writes_vector = !vector_popcount_mask;
+        const bool current_raw = ex_mem_reg.vector_write && reads_vs2_vector &&
+                                 ex_mem_reg.vector_rd == vs2;
+        const bool current_raw_vs1 = ex_mem_reg.vector_write && reads_vs1_vector &&
+                                     ex_mem_reg.vector_rd == vs1;
+        const bool current_raw_mask = ex_mem_reg.vector_write && reads_mask &&
+                                      ex_mem_reg.vector_rd == 0;
+        const bool current_waw = ex_mem_reg.vector_write && writes_vector &&
+                                 ex_mem_reg.vector_rd == vd;
+        const bool previous_raw = ex_mem_reg.prev_vector_write && reads_vs2_vector &&
+                                  ex_mem_reg.prev_vector_rd == vs2;
+        const bool previous_raw_vs1 = ex_mem_reg.prev_vector_write && reads_vs1_vector &&
+                                      ex_mem_reg.prev_vector_rd == vs1;
+        const bool previous_raw_mask = ex_mem_reg.prev_vector_write && reads_mask &&
+                                       ex_mem_reg.prev_vector_rd == 0;
+        const bool previous_waw = ex_mem_reg.prev_vector_write && writes_vector &&
+                                  ex_mem_reg.prev_vector_rd == vd;
+
+        if (current_raw || current_raw_vs1 || current_raw_mask || current_waw)
+            return STALL_TWO_CYCLES;
+        if (previous_raw || previous_raw_vs1 || previous_raw_mask || previous_waw)
             return STALL_ONE_CYCLE;
     }
 
