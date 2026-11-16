@@ -31,14 +31,16 @@ LOG="$WORK_DIR/spike.log"
     -o "$ELF" \
     "$SCRIPT_DIR/vector_subset_reference.S"
 
-DONE_PC="$("$RISCV_NM" -n "$ELF" | awk '$3 == "_done" { print $1; exit }')"
-if [[ -z "$DONE_PC" ]]; then
+DONE_PC_HEX="$("$RISCV_NM" -n "$ELF" | awk '$3 == "_done" { print $1; exit }')"
+if [[ -z "$DONE_PC_HEX" ]]; then
     echo "Could not locate _done in the linked Spike reference ELF" >&2
     exit 2
 fi
-
+# Spike's debugger parses the address as a base-0 integer. Convert nm's
+# hexadecimal symbol to decimal explicitly instead of relying on parser defaults.
+DONE_PC=$((16#$DONE_PC_HEX))
 cat > "$COMMANDS" <<EOF
-until pc 0 0x$DONE_PC
+until pc 0 $DONE_PC
 reg 0 a0
 reg 0 a1
 reg 0 a2
@@ -52,8 +54,16 @@ quit
 EOF
 
 # Spike's V profile implies Zve64d and Zvl128b: ELEN=64, VLEN=128.
+set +e
 timeout --signal=TERM --kill-after=5s 60s \
     "$SPIKE_BIN" --isa=rv64gcv -d --debug-cmd="$COMMANDS" "$ELF" >"$LOG" 2>&1
+SPIKE_STATUS=$?
+set -e
+if [[ "$SPIKE_STATUS" -ne 0 ]]; then
+    echo "Spike exited with status $SPIKE_STATUS; debugger output follows:" >&2
+    cat "$LOG" >&2
+    exit "$SPIKE_STATUS"
+fi
 
 mapfile -t ACTUAL < <(grep -E '^0x[[:xdigit:]]{16}$' "$LOG" | tr '[:upper:]' '[:lower:]')
 EXPECTED=(
