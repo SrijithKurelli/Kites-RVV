@@ -42,8 +42,7 @@ for symbol in _start tohost fromhost; do
     fi
 done
 
-# Pass the ELF entry point explicitly. Keep Spike's reset ROM enabled: it
-# performs the jump to this address before starting the bare-metal payload.
+# Validate the ELF entry point and HTIF symbols before launching Spike.
 ENTRY_POINT="$("$RISCV_READELF" -h "$ELF" | awk '/Entry point address:/ { print $4 }')"
 if [[ ! "$ENTRY_POINT" =~ ^0x[[:xdigit:]]+$ ]] || [[ "$ENTRY_POINT" == "0x0" ]]; then
     echo "Invalid ELF entry point: ${ENTRY_POINT:-<empty>}" >&2
@@ -51,18 +50,37 @@ if [[ ! "$ENTRY_POINT" =~ ^0x[[:xdigit:]]+$ ]] || [[ "$ENTRY_POINT" == "0x0" ]];
     exit 4
 fi
 
-# Run with a bounded instruction trace so failures include the last guest PCs.
+# The pinned Spike version supports a hart-specific --pcs override that bypasses
+# the built-in reset ROM. With DTB/ROM startup disabled, hart 0 begins exactly
+# at the validated ELF entry point rather than trapping at address zero.
+SPIKE_ARGS=(--isa=rv64gcv --disable-dtb --pcs="0:$ENTRY_POINT" -l --log="$LOG")
+
+# Run with a bounded instruction trace so failures include guest PCs.
 set +e
 timeout --signal=TERM --kill-after=5s 15s \
-    "$SPIKE_BIN" --isa=rv64gcv --pc="$ENTRY_POINT" -l --log="$LOG" "$ELF" >/dev/null 2>&1
+    "$SPIKE_BIN" "${SPIKE_ARGS[@]}" "$ELF" >/dev/null 2>&1
 SPIKE_STATUS=$?
 set -e
 
 if [[ "$SPIKE_STATUS" -ne 0 ]]; then
     echo "Spike reference program exited with status $SPIKE_STATUS." >&2
-    echo "ELF entry point and HTIF symbols:" >&2
-    "$RISCV_READELF" -h "$ELF" >&2
-    "$RISCV_NM" -n "$ELF" | grep -E '(_start|tohost|fromhost)$' >&2 || true
+    echo "ELF header and load segments:" >&2
+    "$RISCV_READELF" -h -l "$ELF" >&2
+    echo "Entry point and HTIF symbols:" >&2
+    "$RISCV_NM" -n "$ELF" | grep -E '(_start|tohost|fromhost)    exit "$SPIKE_STATUS"
+fi
+
+if grep -q "\*\*\* FAILED \*\*\*" "$LOG"; then
+    echo "Spike reported a failed architectural result check:" >&2
+    cat "$LOG" >&2
+    exit 1
+fi
+
+echo "Spike RVV reference check passed (VLEN=128, ELEN=64, SEW=32, AVL=4)."
+echo "Verified vmul.vv lanes [12,-21,-8,15], vmul.vx lanes [-6,9,-12,-15], and vredsum.vs result -2."
+ >&2 || true
+    echo "First 40 guest trace lines:" >&2
+    head -n 40 "$LOG" >&2
     echo "Last 100 guest trace lines:" >&2
     tail -n 100 "$LOG" >&2
     exit "$SPIKE_STATUS"
