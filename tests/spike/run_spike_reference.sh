@@ -45,7 +45,7 @@ done
 # Run with a bounded instruction trace so failures include the last guest PCs.
 set +e
 timeout --signal=TERM --kill-after=5s 15s \
-    "$SPIKE_BIN" --isa=rv64gcv -l --log="$LOG" "$ELF" >/dev/null 2>&1
+    "$SPIKE_BIN" --isa=rv64gcv --disable-dtb -l --log="$LOG" "$ELF" >/dev/null 2>&1
 SPIKE_STATUS=$?
 set -e
 
