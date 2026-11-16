@@ -31,8 +31,7 @@ LOG="$WORK_DIR/spike.log"
     -o "$ELF" \
     "$SCRIPT_DIR/vector_subset_reference.S"
 
-# Confirm that the linker retained the entry point and HTIF mailbox symbols;
-# without these symbols Spike cannot observe guest completion.
+# Confirm that the linker retained the entry point and HTIF mailbox symbols.
 SYMBOLS="$("$RISCV_NM" -n "$ELF")"
 for symbol in _start tohost fromhost; do
     if ! grep -Eq "[[:space:]]${symbol}$" <<<"$SYMBOLS"; then
@@ -43,8 +42,7 @@ for symbol in _start tohost fromhost; do
     fi
 done
 
-# Keep a bounded instruction trace so a failed mailbox handoff is diagnosable.
-# The guest itself checks every output lane and writes its HTIF pass/fail code.
+# Run with a bounded instruction trace so failures include the last guest PCs.
 set +e
 timeout --signal=TERM --kill-after=5s 15s \
     "$SPIKE_BIN" --isa=rv64gcv -l --log="$LOG" "$ELF" >/dev/null 2>&1
@@ -55,16 +53,7 @@ if [[ "$SPIKE_STATUS" -ne 0 ]]; then
     echo "Spike reference program exited with status $SPIKE_STATUS." >&2
     echo "ELF entry point and HTIF symbols:" >&2
     "$RISCV_READELF" -h "$ELF" >&2
-    "$RISCV_NM" -n "$ELF" | grep -E '(_start|tohost|fromhost)
-if grep -q "\*\*\* FAILED \*\*\*" "$LOG"; then
-    echo "Spike reported a failed architectural result check:" >&2
-    cat "$LOG" >&2
-    exit 1
-fi
-
-echo "Spike RVV reference check passed (VLEN=128, ELEN=64, SEW=32, AVL=4)."
-echo "Verified vmul.vv lanes [12,-21,-8,15], vmul.vx lanes [-6,9,-12,-15], and vredsum.vs result -2."
- >&2
+    "$RISCV_NM" -n "$ELF" | grep -E '(_start|tohost|fromhost)$' >&2 || true
     echo "Last 100 guest trace lines:" >&2
     tail -n 100 "$LOG" >&2
     exit "$SPIKE_STATUS"
