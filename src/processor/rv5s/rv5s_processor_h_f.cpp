@@ -285,6 +285,39 @@ void RV5StageProcessorHF::pipeline_fetch()
 
 void RV5StageProcessorHF::pipeline_execute()
 {
+    if ((id_ex_reg_.instruction & 0x7Fu) == 0x57u)
+    {
+        const auto vector = execute_vector_instruction(true);
+        ex_mem_reg_.prev_reg_write = ex_mem_reg_.reg_write;
+        ex_mem_reg_.prev_rd = ex_mem_reg_.rd;
+        ex_mem_reg_.prev_freg_write = ex_mem_reg_.freg_write;
+        ex_mem_reg_.prev_frd = ex_mem_reg_.frd;
+        ex_mem_reg_.prev_vector_write = ex_mem_reg_.vector_write;
+        ex_mem_reg_.prev_vector_rd = ex_mem_reg_.vector_rd;
+        ex_mem_reg_.pc = id_ex_reg_.pc;
+        ex_mem_reg_.instruction = id_ex_reg_.instruction;
+        ex_mem_reg_.alu_result = vector.scalar_result;
+        ex_mem_reg_.f_alu_result = 0;
+        ex_mem_reg_.vector_result = vector.vector_result;
+        ex_mem_reg_.vector_rd = vector.vector_rd;
+        ex_mem_reg_.vector_write = vector.vector_write;
+        ex_mem_reg_.rd = id_ex_reg_.rd;
+        ex_mem_reg_.frd = id_ex_reg_.frd;
+        ex_mem_reg_.reg2_data = id_ex_reg_.reg2_data;
+        ex_mem_reg_.freg2_data = id_ex_reg_.freg2_data;
+        ex_mem_reg_.reg_write = id_ex_reg_.reg_write;
+        ex_mem_reg_.freg_write = id_ex_reg_.freg_write;
+        ex_mem_reg_.mem_to_reg = id_ex_reg_.mem_to_reg;
+        ex_mem_reg_.prev_mem_read = ex_mem_reg_.mem_read;
+        ex_mem_reg_.prev_mem_write = ex_mem_reg_.mem_write;
+        ex_mem_reg_.mem_read = id_ex_reg_.mem_read;
+        ex_mem_reg_.mem_write = id_ex_reg_.mem_write;
+        ex_mem_reg_.prev_branch_taken = ex_mem_reg_.branch_taken;
+        ex_mem_reg_.branch_taken = false;
+        ex_mem_reg_.branch_target_pc = 0;
+        return;
+    }
+
     uint32_t instruction = id_ex_reg_.instruction;
     bool overflow = false;
     uint64_t alu_result = 0;
