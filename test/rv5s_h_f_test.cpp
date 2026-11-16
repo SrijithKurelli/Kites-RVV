@@ -135,7 +135,9 @@ TEST(RV5StageVM_H_F_TEST, vectorSubsetExecutesWithMaskAndVectorDependencyStalls)
 {
     setupVmStateDirectory();
     RV5StageProcessorHF vm;
-    vm.registers_.WriteVector(0, packVector32({1, 0, 1, 0}));
+    std::array<uint8_t, 16> predicate{};
+    predicate[0] = 0b00000101; // mask lanes 0 and 2
+    vm.registers_.WriteVector(0, predicate);
     vm.registers_.WriteVector(1, packVector32({1, 2, 3, 4}));
     vm.registers_.WriteVector(2, packVector32({10, 20, 30, 40}));
     vm.registers_.WriteVector(3, packVector32({-5, -5, -5, -5}));

@@ -540,8 +540,6 @@ void RV5StageProcessorHF::pipeline_execute()
     ex_mem_reg_.branch_taken = false;
     ex_mem_reg_.branch_target_pc = 0;
 
-    uint8_t opcode = instruction & 0b1111111;
-
     // --- Control Hazard Logic (Automated) ---
 
     // Conditional Branch Check (B-type)
