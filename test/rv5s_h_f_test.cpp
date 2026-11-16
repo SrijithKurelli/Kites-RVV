@@ -185,3 +185,24 @@ TEST(RV5StageVM_H_F_TEST, vectorRegisterWritebackSupportsUndoAndRedo)
     vm.Redo();
     EXPECT_EQ(vm.registers_.ReadVector(3), expected);
 }
+
+TEST(RV5StageVM_H_F_TEST, vectorConfigAndScalarMultiplyForwardGprOperands)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    vm.registers_.WriteVector(1, packVector32({1, -2, 3, -4}));
+    vm.registers_.WriteVector(2, packVector32({10, 10, 10, 10}));
+
+    const auto program = assemble("../examples/vector/vector_pipeline_hf_gpr_forwarding.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    // x7 supplies AVL directly after its producing ADDI; x5 receives VL from
+    // vsetvli and is consumed by the next ADDI; x6 supplies vmul.vx directly.
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 4u);
+    EXPECT_EQ(vm.registers_.ReadGpr(8), 5u);
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(3)),
+              (std::array<int32_t, 4>{3, -6, 9, -12}));
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(4)),
+              (std::array<int32_t, 4>{13, 4, 19, -2}));
+}

@@ -123,10 +123,13 @@ population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
 forms.
 
-The eleven vector example programs under `examples/vector/` provide runnable
-load-compute-store, comparison/count, masked-memory, average,
-selected bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
-cross-product, and 2x2 matrix-multiplication workflows.
+Twelve general RVSS assembly examples under `examples/vector/` provide
+load-compute-store, comparison/count, masked-memory, average, selected
+bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
+cross-product, and 2x2/3x3 matrix-multiplication workflows. Three additional
+H_F pipeline test fixtures exercise masked vector dependency stalls,
+vector writeback undo/redo, and GPR forwarding into `vsetvli` and `vmul.vx`;
+the unit tests seed their vector-register inputs.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
@@ -155,12 +158,14 @@ all eleven examples were smoke-tested. CI #130 passed 380 tests, with one
 skipped and four disabled; it also passed the invalid-immediate, `rd=x0`, and
 immediate-AVL load-compute-store regressions. See [CI #119](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43742024859)
 and [CI #122](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43743377319). See [CI #123](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43744532237) and [CI #125](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43748923884). CI #125 passed 359 tests, skipped one, disabled four, and had zero failures (32.16 seconds); it validated the initial timing-model tests and CLI summary/help checks. CI #126 passed 364 tests, skipped one, disabled four, and had zero failures (18.15 seconds); it validated vector configuration/disassembly edge cases, timing input/overflow hardening and strict CLI argument checks. CI #127 passed 369 tests, skipped one and disabled four with zero failures (20.53 seconds); all five masked-`v0` overlap, exception and unmasked-use regression tests passed. The clean build and ten-example/timing-CLI smoke checks also passed.
-The workflow built the CLI and test suite under Linux with Qt 6.9.2 and GCC,
-executed all ten runnable assembly examples on RVSS (including bit-manipulation,
-strided-memory, multiplication and matrix/cross-product kernels), asserted that
-the average example prints `2`, and
-exercised the REPL `info` and `regs` commands by checking vector configuration
-and register output. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).
+The workflow builds the CLI and test suite under Linux with Qt 6.9.2 and GCC,
+smoke-tests the general RVSS examples and the H_F pipeline fixture files,
+asserts that the average example prints `2`, and exercises the REPL `info`
+and `regs` commands by checking vector configuration and register output.
+The most recent successful full run, [CI #43842617996](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43842617996),
+reports zero CTest failures (388 active tests, one skipped and four disabled).
+It includes passing tests for vector-register display in all three bases,
+the H_F vector subset and undo/redo, and the 3x3 matrix kernel.
 
 ## 6. Abstract performance model
 

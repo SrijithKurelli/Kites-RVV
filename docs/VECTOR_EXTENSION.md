@@ -318,12 +318,14 @@ tail preservation, memory undo/redo, unsupported vector memory forms, and
 strided memory assembly/execution across SEWs, zero stride, negative stride
 with masking, and active-address store preflight. Vector multiply tests cover OPMVV and OPMVX assembly encoding/disassembly,
 low-bit wraparound at all four SEWs, scalar sign/boundary inputs, and
-masked/tail preservation. CI #119 passed all four `vmul.vv`/dot-product tests;
-CI #122 passed all three `vmul.vx` tests. The cross-product and matrix-kernel
-tests are being validated in the next CI run. The full CMake test suite requires Qt 6.9.2 and
-GoogleTest. CI run #73 reports 100% tests passed with zero failures out of 343
-CTest tests in 19.77 seconds; four tests were disabled and one was skipped. It
-also smoke-tested all six runnable examples, including `vector_bitmanip.s` and
-`vector_strided_memory.s`, and checked CLI vector configuration/register
-inspection. Masked tests cover `v0.t` lane skipping, inactive/tail preservation,
-and memory undo/redo. See [CI run #73](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/42468840913).
+masked/tail preservation. The 3x3 matrix test checks all nine output elements.
+The H_F pipeline tests cover masked dependent vector arithmetic, vector
+writeback undo/redo, and GPR forwarding into `vsetvli` and `vmul.vx`.
+`test/register_model_test.cpp` checks vector display in signed decimal,
+zero-padded hexadecimal, grouped binary, and each supported element width.
+CI run #43842617996 passed the build, all 14 vector-folder assembly smoke
+checks, and CTest: 388 active tests were considered, zero failed, one was
+skipped, and four were disabled. This run includes the UI model tests, both
+existing H_F vector tests, and the 3x3 matrix test. See [CI run #43842617996](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43842617996).
+The independent Spike reference comparison is being reworked separately and
+must not be treated as passed until its new HTIF-based check completes.

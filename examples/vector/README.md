@@ -36,4 +36,20 @@ Expected results:
 | `vector_matrix_multiply_3x3.s` | Computes `[[1,2,3],[4,5,6],[7,8,9]] x [[9,8,7],[6,5,4],[3,2,1]]` and stores `[[30,24,18],[84,69,54],[138,114,90]]` in row-major order. |
 The average example uses a signed scalar `div`, which truncates toward zero.
 When no elements match, its branch sets the result to zero. The first four examples use SEW=32 and VL=4; the bit-manipulation example uses SEW=8 and VL=4; the strided-memory example uses SEW=32 and VL=3. The multiply/dot-product and SAXPY examples use SEW=32 and VL=4; the cross-product uses VL=3; the 2x2 matrix kernel uses VL=2 for dot products and VL=1 for scalar-element stores.
+## H_F pipeline test fixtures
+
+The following additional assembly files are used by the H_F pipeline unit tests.
+The tests seed the vector registers before execution; these files are not
+standalone result demonstrations.
+
+| Program | Pipeline behavior verified |
+|---|---|
+| `vector_pipeline_hf_subset.s` | Masked `vadd.vv`, dependent `vmul.vv` / `vsub.vv`, and vector dependency stalls. |
+| `vector_pipeline_hf_undo.s` | Vector writeback through MEM/WB and vector-register undo/redo. |
+| `vector_pipeline_hf_gpr_forwarding.s` | GPR AVL forwarding into `vsetvli`, forwarding of the returned VL to an integer instruction, and scalar GPR forwarding into `vmul.vx`, followed by a vector dependency. |
+
+These programs are included in the automated example assembly/smoke checks.
+The regular RVSS examples exercise the broader documented subset; H_F pipeline
+execution is limited to the instructions exercised by its unit tests.
+
 These programs exercise the implemented subset, not general RVV 1.0 programs. The separate abstract execution timing model is documented in `docs/VECTOR_PERFORMANCE_MODEL.md` and is available as `kites-vector-timing`.
