@@ -1621,25 +1621,25 @@ TEST(VectorExtension, MatrixMultiply3x3UsesVectorMultiplyAndReduction)
     }
 
     vm.LoadProgram(assembleVectorSource(
-        "vsetvli x14, x5, 16\\n"
-        "vmul.vv v7, v1, v4\\n"
-        "vredsum.vs v8, v7, v0\\n"
-        "vmul.vv v7, v1, v5\\n"
-        "vredsum.vs v9, v7, v0\\n"
-        "vmul.vv v7, v1, v6\\n"
-        "vredsum.vs v10, v7, v0\\n"
-        "vmul.vv v7, v2, v4\\n"
-        "vredsum.vs v11, v7, v0\\n"
-        "vmul.vv v7, v2, v5\\n"
-        "vredsum.vs v12, v7, v0\\n"
-        "vmul.vv v7, v2, v6\\n"
-        "vredsum.vs v13, v7, v0\\n"
-        "vmul.vv v7, v3, v4\\n"
-        "vredsum.vs v14, v7, v0\\n"
-        "vmul.vv v7, v3, v5\\n"
-        "vredsum.vs v15, v7, v0\\n"
-        "vmul.vv v7, v3, v6\\n"
-        "vredsum.vs v16, v7, v0\\n"));
+        "vsetvli x14, x5, 16\n"
+        "vmul.vv v7, v1, v4\n"
+        "vredsum.vs v8, v7, v0\n"
+        "vmul.vv v7, v1, v5\n"
+        "vredsum.vs v9, v7, v0\n"
+        "vmul.vv v7, v1, v6\n"
+        "vredsum.vs v10, v7, v0\n"
+        "vmul.vv v7, v2, v4\n"
+        "vredsum.vs v11, v7, v0\n"
+        "vmul.vv v7, v2, v5\n"
+        "vredsum.vs v12, v7, v0\n"
+        "vmul.vv v7, v2, v6\n"
+        "vredsum.vs v13, v7, v0\n"
+        "vmul.vv v7, v3, v4\n"
+        "vredsum.vs v14, v7, v0\n"
+        "vmul.vv v7, v3, v5\n"
+        "vredsum.vs v15, v7, v0\n"
+        "vmul.vv v7, v3, v6\n"
+        "vredsum.vs v16, v7, v0\n"));
     for (int instruction = 0; instruction < 19; ++instruction)
         vm.Step();
 
