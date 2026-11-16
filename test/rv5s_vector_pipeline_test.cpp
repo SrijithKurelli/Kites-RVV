@@ -144,4 +144,121 @@ TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingUsesProgrammerScheduledBubb
     seedAndRun(vm, kScheduledVectorProgram);
     expectPipelineVectorResults(vm);
 }
+
+namespace
+{
+template <typename Processor>
+void runPipelineVectorMemoryProgram(Processor &vm)
+{
+    vm.registers_.WriteGpr(5, 0x100u); // Strided source base.
+    vm.registers_.WriteGpr(6, 8u);     // Byte stride.
+    vm.registers_.WriteGpr(7, 0x200u); // Strided destination base.
+    vm.registers_.WriteGpr(8, 8u);
+    vm.registers_.WriteGpr(9, 0x300u);  // Unit-stride source base.
+    vm.registers_.WriteGpr(10, 0x400u); // Unit-stride destination base.
+    vm.registers_.WriteGpr(11, 0x500u); // Masked source.
+    vm.registers_.WriteGpr(12, 0x600u); // Masked destination.
+    vm.registers_.WriteVectorByte(0, 0, 0x05u); // Active lanes 0 and 2.
+
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        vm.memory_controller_.writeWord(0x100u + lane * 8u,
+                                        static_cast<uint32_t>(lane + 1u));
+        vm.memory_controller_.writeWord(0x104u + lane * 8u, 0xDEADBEEFu);
+        vm.memory_controller_.writeWord(0x200u + lane * 8u, 0xA5A5A5A5u);
+        vm.memory_controller_.writeWord(0x204u + lane * 8u, 0xCCCCCCCCu);
+
+        vm.memory_controller_.writeWord(0x300u + lane * 4u,
+                                        static_cast<uint32_t>(10u + lane));
+        vm.memory_controller_.writeWord(0x400u + lane * 4u, 0xBBBBBBBBu);
+        vm.memory_controller_.writeWord(0x500u + lane * 4u,
+                                        static_cast<uint32_t>(10u * (lane + 1u)));
+        vm.memory_controller_.writeWord(0x600u + lane * 4u, 0x99999999u);
+    }
+    vm.registers_.WriteVector(5, packWords({-1, -1, -1, -1}));
+
+    vm.LoadProgram(assemblePipelineVectorProgram(R"(
+        vsetivli x0, 4, 16
+        nop
+        nop
+        vlse32.v v1, (x5), x6
+        nop
+        nop
+        vadd.vv v2, v1, v1
+        nop
+        nop
+        vsse32.v v2, (x7), x8
+        nop
+        nop
+        vle32.v v3, (x9)
+        nop
+        nop
+        vse32.v v3, (x10)
+        nop
+        nop
+        vle32.v v5, (x11), v0.t
+        nop
+        nop
+        vse32.v v5, (x12), v0.t
+        nop
+        nop
+    )"));
+    vm.DebugRun();
+
+    // Strided load/compute/store: padding between active words is untouched.
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readWordLane(vm.registers_, 1, lane), static_cast<int32_t>(lane + 1u));
+        EXPECT_EQ(readWordLane(vm.registers_, 2, lane), static_cast<int32_t>(2u * (lane + 1u)));
+        EXPECT_EQ(vm.memory_controller_.readWord(0x200u + lane * 8u),
+                  static_cast<uint32_t>(2u * (lane + 1u)));
+        EXPECT_EQ(vm.memory_controller_.readWord(0x204u + lane * 8u), 0xCCCCCCCCu);
+
+        // Unit-stride load/store copies four adjacent words.
+        EXPECT_EQ(readWordLane(vm.registers_, 3, lane), static_cast<int32_t>(10u + lane));
+        EXPECT_EQ(vm.memory_controller_.readWord(0x400u + lane * 4u),
+                  static_cast<uint32_t>(10u + lane));
+    }
+
+    // Masked load keeps inactive destination lanes unchanged; masked store
+    // leaves corresponding memory words untouched.
+    EXPECT_EQ(readWordLane(vm.registers_, 5, 0), 10);
+    EXPECT_EQ(readWordLane(vm.registers_, 5, 1), -1);
+    EXPECT_EQ(readWordLane(vm.registers_, 5, 2), 30);
+    EXPECT_EQ(readWordLane(vm.registers_, 5, 3), -1);
+    EXPECT_EQ(vm.memory_controller_.readWord(0x600u), 10u);
+    EXPECT_EQ(vm.memory_controller_.readWord(0x604u), 0x99999999u);
+    EXPECT_EQ(vm.memory_controller_.readWord(0x608u), 30u);
+    EXPECT_EQ(vm.memory_controller_.readWord(0x60Cu), 0x99999999u);
+}
+} // namespace
+
+TEST(RV5VectorPipeline, HazardDetectionAndForwardingSupportsVectorMemory)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    runPipelineVectorMemoryProgram(vm);
+}
+
+TEST(RV5VectorPipeline, HazardDetectionWithoutForwardingSupportsVectorMemory)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHNF vm;
+    runPipelineVectorMemoryProgram(vm);
+}
+
+TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionSupportsScheduledVectorMemory)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHF vm;
+    runPipelineVectorMemoryProgram(vm);
+}
+
+TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingSupportsScheduledVectorMemory)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHNF vm;
+    runPipelineVectorMemoryProgram(vm);
+}
+
 } // namespace
