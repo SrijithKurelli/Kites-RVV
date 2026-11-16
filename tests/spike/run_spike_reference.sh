@@ -50,7 +50,7 @@ fi
 
 # The pinned Spike source supports per-hart start-PC overrides. With the
 # device tree disabled, --pcs prevents the reset/ROM path from starting at 0.
-SPIKE_ARGS=(--isa=rv64gcv --disable-dtb --pcs="0:$ENTRY_POINT" -l --log="$LOG")
+SPIKE_ARGS=(--isa=rv64gcv --varch=vlen:128,elen:64 --disable-dtb --pcs="0:$ENTRY_POINT" -l --log="$LOG")
 
 set +e
 timeout --signal=TERM --kill-after=5s 15s \

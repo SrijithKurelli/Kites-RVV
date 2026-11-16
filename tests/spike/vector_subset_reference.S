@@ -2,6 +2,12 @@
     .globl _start
     .type _start, @function
 _start:
+    # Bare-metal M-mode starts with mstatus.VS=Off. Enable vector state.
+    csrr    t0, mstatus
+    li      t1, 0x600          # mstatus.VS = Dirty
+    or      t0, t0, t1
+    csrw    mstatus, t0
+
     la      t0, lhs
     la      t1, rhs
 

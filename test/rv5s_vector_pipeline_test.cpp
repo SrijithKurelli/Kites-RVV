@@ -410,7 +410,7 @@ struct PipelineVectorSnapshot
 };
 
 template <typename Processor>
-PipelineVectorSnapshot capturePipelineVectorSnapshot(const Processor &vm)
+PipelineVectorSnapshot capturePipelineVectorSnapshot(Processor &vm)
 {
     PipelineVectorSnapshot snapshot;
     snapshot.pc = vm.program_counter_;
