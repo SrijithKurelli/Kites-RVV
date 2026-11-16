@@ -42,10 +42,20 @@ for symbol in _start tohost fromhost; do
     fi
 done
 
+# Spike's reset ROM uses the configured start PC. Pass the ELF entry point
+# explicitly so the bare-metal test never falls back to address zero when the
+# ELF loader or toolchain's entry-point metadata differs.
+ENTRY_POINT="$("$RISCV_READELF" -h "$ELF" | awk '/Entry point address:/ { print $4 }')"
+if [[ ! "$ENTRY_POINT" =~ ^0x[[:xdigit:]]+$ ]] || [[ "$ENTRY_POINT" == "0x0" ]]; then
+    echo "Invalid ELF entry point: ${ENTRY_POINT:-<empty>}" >&2
+    "$RISCV_READELF" -h "$ELF" >&2
+    exit 4
+fi
+
 # Run with a bounded instruction trace so failures include the last guest PCs.
 set +e
 timeout --signal=TERM --kill-after=5s 15s \
-    "$SPIKE_BIN" --isa=rv64gcv --disable-dtb -l --log="$LOG" "$ELF" >/dev/null 2>&1
+    "$SPIKE_BIN" --isa=rv64gcv --pc="$ENTRY_POINT" --disable-dtb -l --log="$LOG" "$ELF" >/dev/null 2>&1
 SPIKE_STATUS=$?
 set -e
 
