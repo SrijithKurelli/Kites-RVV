@@ -53,6 +53,10 @@ class RV5StageVM_Base : public ProcessorBase
     // The control unit for the pipeline
     RV5SControlUnit control_unit_;
 
+    // Architectural state used by the selected RVV subset in the H_F pipeline.
+    uint8_t vector_sew_ {8};
+    uint8_t vector_vl_ {0};
+
     std::stack<RV5StageStepDelta> undo_stack_{};
     std::stack<RV5StageStepDelta> redo_stack_{};
     RV5StageStepDelta current_delta_;

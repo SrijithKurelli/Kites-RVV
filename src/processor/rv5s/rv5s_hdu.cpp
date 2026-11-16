@@ -35,6 +35,17 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     // --- 1. Extract Source Register Indices from IF/ID Instruction (Dependent) ---
     uint32_t instruction = if_id_reg.instruction;
 
+    // Vector opcode 0x57 reuses rs1/rs2 fields for vector indices except
+    // vset* (GPR AVL source) and vmul.vx (GPR scalar source).
+    const uint8_t opcode = instruction & 0x7Fu;
+    const uint8_t funct3 = (instruction >> 12) & 0x7u;
+    const uint8_t funct6 = (instruction >> 26) & 0x3Fu;
+    const bool vector_opcode = opcode == 0b1010111;
+    const bool vector_config = vector_opcode && funct3 == 0b111;
+    const bool vector_scalar = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
+    const bool read_gpr_rs1 = !vector_opcode || vector_config || vector_scalar;
+    const bool read_gpr_rs2 = !vector_opcode;
+
     // GPR Source Registers (rs1/rs2 fields)
     uint8_t if_id_rs1 = (instruction >> 15) & 0x1F;
     uint8_t if_id_rs2 = (instruction >> 20) & 0x1F;
@@ -48,25 +59,27 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     // --- 2. Check for GPR Hazard (Source writes GPR, Dependent reads GPR) ---
     // Two-cycle hazard: current EX/MEM instruction writes a GPR the IF/ID instruction reads
     bool gpr_hazard_two_cycle = (ex_mem_reg.reg_write && (ex_mem_reg.rd != 0)) &&
-                                (ex_mem_reg.rd == if_id_rs1 || ex_mem_reg.rd == if_id_rs2);
+                                ((read_gpr_rs1 && ex_mem_reg.rd == if_id_rs1) ||
+                                 (read_gpr_rs2 && ex_mem_reg.rd == if_id_rs2));
 
     // One-cycle hazard: previous EX/MEM instruction (now further down) writes a GPR the IF/ID
     // instruction reads
     bool gpr_hazard_one_cycle =
         (ex_mem_reg.prev_reg_write && (ex_mem_reg.prev_rd != 0)) &&
-        (ex_mem_reg.prev_rd == if_id_rs1 || ex_mem_reg.prev_rd == if_id_rs2);
+        ((read_gpr_rs1 && ex_mem_reg.prev_rd == if_id_rs1) ||
+         (read_gpr_rs2 && ex_mem_reg.prev_rd == if_id_rs2));
 
     bool gpr_hazard = gpr_hazard_one_cycle || gpr_hazard_two_cycle;
 
     // --- 3. Check for FPR Hazard (Source writes FPR, Dependent reads FPR) ---
     // Note: FPR f0 is NOT hardwired to zero (unlike GPR x0), so no frd != 0 check needed.
     // Two-cycle hazard: current EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_two_cycle =
+    bool fpr_hazard_two_cycle = !vector_opcode &&
         (ex_mem_reg.freg_write) && (ex_mem_reg.frd == if_id_frs1 || ex_mem_reg.frd == if_id_frs2 ||
                                     ex_mem_reg.frd == if_id_frs3);
 
     // One-cycle hazard: previous EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_one_cycle =
+    bool fpr_hazard_one_cycle = !vector_opcode &&
         (ex_mem_reg.prev_freg_write) &&
         (ex_mem_reg.prev_frd == if_id_frs1 || ex_mem_reg.prev_frd == if_id_frs2 ||
          ex_mem_reg.prev_frd == if_id_frs3);
@@ -79,6 +92,25 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
     bool any_hazard_one_cycle = gpr_hazard_one_cycle || fpr_hazard_one_cycle;
     bool any_hazard = gpr_hazard || fpr_hazard;
 
+    // The selected H_F vector path does not forward 128-bit vector values.
+    // Conservatively insert one bubble for RAW, WAW, and implicit v0-mask hazards.
+    if (vector_opcode && !vector_config && ex_mem_reg.vector_write)
+    {
+        const uint8_t vd = (instruction >> 7) & 0x1Fu;
+        const uint8_t vs1 = (instruction >> 15) & 0x1Fu;
+        const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
+        const bool vm = ((instruction >> 25) & 1u) != 0;
+        const bool reads_vs1_vector = funct3 == 0b000 ||
+                                      (funct3 == 0b010 && funct6 == 0b100101);
+        const bool reads_mask = !vm;
+        const bool raw_hazard = ex_mem_reg.vector_rd == vs2 ||
+                                (reads_vs1_vector && ex_mem_reg.vector_rd == vs1) ||
+                                (reads_mask && ex_mem_reg.vector_rd == 0);
+        const bool waw_hazard = ex_mem_reg.vector_rd == vd;
+        if (raw_hazard || waw_hazard)
+            return STALL_ONE_CYCLE;
+    }
+
     if (is_forwarding_enabled)
     {
         // --- Forwarding ON: Detects Load-Use only (1 Stall) ---
@@ -88,9 +120,10 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
         {
             // Check if the load destination matches any source of the dependent instruction
             bool gpr_load_use = (id_ex_reg.reg_write && id_ex_reg.rd != 0) &&
-                                (id_ex_reg.rd == if_id_rs1 || id_ex_reg.rd == if_id_rs2);
+                                ((read_gpr_rs1 && id_ex_reg.rd == if_id_rs1) ||
+                                 (read_gpr_rs2 && id_ex_reg.rd == if_id_rs2));
 
-            bool fpr_load_use = (id_ex_reg.freg_write) &&
+            bool fpr_load_use = !vector_opcode && (id_ex_reg.freg_write) &&
                                 (id_ex_reg.frd == if_id_frs1 || id_ex_reg.frd == if_id_frs2 ||
                                  id_ex_reg.frd == if_id_frs3);
 

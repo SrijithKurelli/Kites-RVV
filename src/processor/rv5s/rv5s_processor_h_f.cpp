@@ -16,7 +16,10 @@
 #include "processor/pipeline_registers.h"
 #include "processor/processor_base.h"
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdint>
+#include <stdexcept>
 #include <iostream>
 #include <thread>
 #include <tuple>
@@ -243,6 +246,10 @@ void RV5StageProcessorHF::Step()
     {
         // NO STALL: Advance pipeline normally
         pipeline_decode();
+        // vsetvli/vsetivli return the selected VL in the integer rd register.
+        if ((id_ex_reg_.instruction & 0x7Fu) == 0b1010111 &&
+            ((id_ex_reg_.instruction >> 12) & 0x7u) == 0b111u)
+            id_ex_reg_.reg_write = id_ex_reg_.rd != 0;
         stall_fetch_and_decode_ = false;
     }
 
@@ -279,13 +286,138 @@ void RV5StageProcessorHF::pipeline_fetch()
 void RV5StageProcessorHF::pipeline_execute()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    bool overflow;
-    uint64_t alu_result;
+    bool overflow = false;
+    uint64_t alu_result = 0;
+    bool vector_write = false;
+    uint8_t vector_rd = 0;
+    std::array<uint8_t, 16> vector_result{};
 
     bool is_f_instruction = instruction_set::isFInstruction(instruction);
     bool is_d_instruction = instruction_set::isDInstruction(instruction);
+    const uint8_t opcode = instruction & 0x7Fu;
+    const uint8_t funct3 = (instruction >> 12) & 0x7u;
 
-    if (is_f_instruction)
+    if (opcode == 0b1010111)
+    {
+        const uint8_t rd = (instruction >> 7) & 0x1Fu;
+        const uint8_t rs1 = (instruction >> 15) & 0x1Fu;
+        const uint8_t funct6 = (instruction >> 26) & 0x3Fu;
+
+        if (funct3 == 0b111)
+        {
+            // Configuration subset: vsetvli and vsetivli, LMUL=1, SEW 8/16/32/64.
+            const uint32_t format = instruction >> 30;
+            if (format == 0b10)
+                throw std::runtime_error("vsetvl is not supported by the H_F vector subset");
+            if (format == 0b01)
+                throw std::runtime_error("Reserved vector configuration format");
+            const bool immediate_avl = format == 0b11;
+            const uint16_t zimm = static_cast<uint16_t>(
+                (instruction >> 20) & (immediate_avl ? 0x3FFu : 0x7FFu));
+            if (zimm != 0 && zimm != 8 && zimm != 16 && zimm != 24)
+                throw std::runtime_error(
+                    "Unsupported vector configuration: H_F supports LMUL=1, SEW 8/16/32/64");
+
+            const uint8_t new_sew = static_cast<uint8_t>(8u << ((zimm >> 3) & 0x7u));
+            const uint8_t vlmax = static_cast<uint8_t>(128u / new_sew);
+            uint64_t avl = 0;
+            if (immediate_avl)
+                avl = rs1;
+            else if (rs1 == 0)
+            {
+                if (rd != 0)
+                    avl = UINT64_MAX;
+                else
+                {
+                    const uint8_t old_vlmax = static_cast<uint8_t>(128u / vector_sew_);
+                    if (vlmax != old_vlmax)
+                        throw std::runtime_error(
+                            "vsetvli x0, x0 requires unchanged VLMAX (reserved form)");
+                    avl = vector_vl_;
+                }
+            }
+            else
+                avl = forward_gpr(rs1, id_ex_reg_.reg1_data);
+
+            vector_sew_ = new_sew;
+            vector_vl_ = static_cast<uint8_t>(std::min<uint64_t>(avl, vlmax));
+            if (rd != 0)
+                alu_result = vector_vl_;
+        }
+        else
+        {
+            // This pipeline milestone supports masked/unmasked vadd.vv, vsub.vv,
+            // vmul.vv and vmul.vx. Vector results commit in WB; the HDU inserts
+            // a bubble when a younger instruction consumes a pending vector result.
+            const bool vector_vector = funct3 == 0b000 ||
+                                       (funct3 == 0b010 && funct6 == 0b100101);
+            const bool vector_scalar = funct3 == 0b110 && funct6 == 0b100101;
+            const bool supported =
+                (funct3 == 0b000 && (funct6 == 0b000000 || funct6 == 0b000010)) ||
+                (funct3 == 0b010 && funct6 == 0b100101) || vector_scalar;
+            if (!supported)
+                throw std::runtime_error("Unsupported vector operation in the H_F pipeline subset");
+            if (vector_sew_ != 8 && vector_sew_ != 16 &&
+                vector_sew_ != 32 && vector_sew_ != 64)
+                throw std::runtime_error("Invalid SEW in H_F vector state");
+            if (vector_vl_ > 128u / vector_sew_)
+                throw std::runtime_error("VL exceeds VLMAX in H_F vector state");
+
+            const uint8_t vd = rd;
+            const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
+            const uint8_t vs1 = rs1;
+            const bool vm = ((instruction >> 25) & 1u) != 0;
+            if (!vm && (vd == 0 || vs2 == 0 || (vector_vector && vs1 == 0)))
+                throw std::runtime_error("Masked H_F vector operands cannot overlap v0");
+
+            const size_t element_bytes = vector_sew_ / 8u;
+            const uint64_t element_mask = vector_sew_ == 64
+                ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
+            const auto read_element = [element_bytes](const std::array<uint8_t, 16> &bytes,
+                                                       size_t lane) {
+                uint64_t value = 0;
+                const size_t offset = lane * element_bytes;
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    value |= static_cast<uint64_t>(bytes[offset + byte]) << (8u * byte);
+                return value;
+            };
+            const auto write_element = [element_bytes](std::array<uint8_t, 16> &bytes,
+                                                        size_t lane, uint64_t value) {
+                const size_t offset = lane * element_bytes;
+                for (size_t byte = 0; byte < element_bytes; ++byte)
+                    bytes[offset + byte] = static_cast<uint8_t>((value >> (8u * byte)) & 0xFFu);
+            };
+
+            const auto source2 = registers_.ReadVector(vs2);
+            const auto source1 = vector_vector ? registers_.ReadVector(vs1)
+                                               : std::array<uint8_t, 16>{};
+            const auto predicate = vm ? std::array<uint8_t, 16>{} : registers_.ReadVector(0);
+            vector_result = registers_.ReadVector(vd);
+            const uint64_t scalar = vector_scalar
+                ? (forward_gpr(vs1, id_ex_reg_.reg1_data) & element_mask) : 0;
+
+            for (size_t lane = 0; lane < vector_vl_; ++lane)
+            {
+                if (!vm && ((predicate[lane / 8u] >> (lane % 8u)) & 1u) == 0)
+                    continue;
+
+                const uint64_t a = read_element(source2, lane);
+                const uint64_t b = vector_scalar ? scalar : read_element(source1, lane);
+                uint64_t value = 0;
+                if (funct6 == 0b000000)
+                    value = (a + b) & element_mask;
+                else if (funct6 == 0b000010)
+                    value = (a - b) & element_mask;
+                else
+                    value = (a * b) & element_mask;
+                write_element(vector_result, lane, value);
+            }
+
+            vector_write = true;
+            vector_rd = vd;
+        }
+    }
+    else if (is_f_instruction)
     {
         alu_result = pipeline_execute_float();
     }
@@ -390,6 +522,9 @@ void RV5StageProcessorHF::pipeline_execute()
     ex_mem_reg_.instruction = id_ex_reg_.instruction;
     ex_mem_reg_.alu_result = alu_result;
     ex_mem_reg_.f_alu_result = (is_f_instruction || is_d_instruction) ? alu_result : 0;
+    ex_mem_reg_.vector_result = vector_result;
+    ex_mem_reg_.vector_rd = vector_rd;
+    ex_mem_reg_.vector_write = vector_write;
     ex_mem_reg_.rd = id_ex_reg_.rd;
     ex_mem_reg_.frd = id_ex_reg_.frd;
     // NOTE: reg2_data and freg2_data are set inside the integer/FP execute

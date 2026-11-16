@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include "processor/processor_constants.h"
 namespace Kites
@@ -100,6 +101,11 @@ struct EX_MEM_Register
     uint64_t freg2_data   {0};  // Data from frs2, needed for Store instructions
     uint8_t  frd          {0};  // FPR Destination register index
     uint8_t  prev_frd     {0};  // Previous FPR Destination register index (for one cycle delay)
+
+    // Vector result is carried through EX/MEM and MEM/WB in the H_F vector subset.
+    std::array<uint8_t, 16> vector_result{};
+    uint8_t vector_rd {0};
+    bool vector_write {false};
     // Branching info calculated in EX stage
     bool     branch_taken      {false};
     bool     prev_branch_taken {false};  // we'll use this for hightlighting purposes
@@ -131,6 +137,9 @@ struct EX_MEM_Register
         freg2_data   = 0;
         frd          = 0;
         prev_frd     = 0;
+        vector_result.fill(0);
+        vector_rd = 0;
+        vector_write = false;
 
         branch_taken      = false;
         prev_branch_taken = false;
@@ -166,6 +175,11 @@ struct MEM_WB_Register
     uint64_t f_alu_result  {0};  // FPR Write Data (F-ALU result)
     uint8_t  frd           {0};  // FPR Destination register index
 
+    // Vector writeback payload (used by the H_F pipeline subset).
+    std::array<uint8_t, 16> vector_result{};
+    uint8_t vector_rd {0};
+    bool vector_write {false};
+
     uint64_t prev_f_memory_data {0};  // Previous FPR Memory data (for forwarding)
     uint64_t prev_f_alu_result {0};   // Previous FPR ALU
     uint8_t  prev_frd {0};            // Previous FPR Destination register index
@@ -193,6 +207,9 @@ struct MEM_WB_Register
         f_memory_data = 0;
         f_alu_result  = 0;
         frd           = 0;
+        vector_result.fill(0);
+        vector_rd = 0;
+        vector_write = false;
 
         prev_f_memory_data = 0;
         prev_f_alu_result  = 0;

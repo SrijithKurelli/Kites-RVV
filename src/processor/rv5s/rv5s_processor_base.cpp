@@ -108,6 +108,8 @@ void RV5StageVM_Base::Reset()
     registers_.Reset();
     memory_controller_.reset();
     control_unit_.Reset();
+    vector_sew_ = 8;
+    vector_vl_ = 0;
 
     if_id_reg_.reset();
     id_ex_reg_.reset();
@@ -127,6 +129,8 @@ void RV5StageVM_Base::begin_step_delta()
     current_delta_.old_stall_cycles          = stall_cycles_;
     current_delta_.old_instructions_retired  = instructions_retired_;
     current_delta_.old_branch_mispredictions = branch_mispredictions_;
+    current_delta_.old_vector_sew = vector_sew_;
+    current_delta_.old_vector_vl = vector_vl_;
 
     current_delta_.pipeline_register_change.old_if_id_reg  = if_id_reg_;
     current_delta_.pipeline_register_change.old_id_ex_reg  = id_ex_reg_;
@@ -141,6 +145,8 @@ void RV5StageVM_Base::finalize_step_delta()
     current_delta_.new_stall_cycles          = stall_cycles_;
     current_delta_.new_instructions_retired  = instructions_retired_;
     current_delta_.new_branch_mispredictions = branch_mispredictions_;
+    current_delta_.new_vector_sew = vector_sew_;
+    current_delta_.new_vector_vl = vector_vl_;
 
     current_delta_.pipeline_register_change.new_if_id_reg  = if_id_reg_;
     current_delta_.pipeline_register_change.new_id_ex_reg  = id_ex_reg_;
@@ -463,6 +469,9 @@ void RV5StageVM_Base::pipeline_memory()
     mem_wb_reg_.frd          = ex_mem_reg_.frd;
     mem_wb_reg_.f_alu_result = ex_mem_reg_.f_alu_result;
     mem_wb_reg_.freg_write   = ex_mem_reg_.freg_write;
+    mem_wb_reg_.vector_result = ex_mem_reg_.vector_result;
+    mem_wb_reg_.vector_rd = ex_mem_reg_.vector_rd;
+    mem_wb_reg_.vector_write = ex_mem_reg_.vector_write;
 
     bool is_F_Instruction = instruction_set::isFInstruction(mem_wb_reg_.instruction);
     bool is_D_Instruction = instruction_set::isDInstruction(mem_wb_reg_.instruction);
@@ -585,6 +594,19 @@ void RV5StageVM_Base::pipeline_writeback()
         instructions_retired_++;
     }
 
+    if (mem_wb_reg_.vector_write)
+    {
+        const auto old_value = registers_.ReadVector(mem_wb_reg_.vector_rd);
+        if (old_value != mem_wb_reg_.vector_result)
+        {
+            RegisterChange change{mem_wb_reg_.vector_rd, 3, 0, 0};
+            change.old_vector_value = old_value;
+            change.new_vector_value = mem_wb_reg_.vector_result;
+            current_delta_.register_changes.push_back(change);
+        }
+        registers_.WriteVector(mem_wb_reg_.vector_rd, mem_wb_reg_.vector_result);
+    }
+
     if (!mem_wb_reg_.reg_write && !mem_wb_reg_.freg_write)
     {
         return;
@@ -648,6 +670,12 @@ void RV5StageVM_Base::pipeline_writeback()
         case 0b0110111:
         { // LUI
             registers_.WriteGpr(mem_wb_reg_.rd, write_data);
+            break;
+        }
+        case 0b1010111: // Vector configuration instructions return VL in rd.
+        {
+            if (((mem_wb_reg_.instruction >> 12) & 0x7u) == 0b111u)
+                registers_.WriteGpr(mem_wb_reg_.rd, write_data);
             break;
         }
         default:
@@ -835,11 +863,11 @@ bool RV5StageVM_Base::is_pipeline_drained() const
     // EX/MEM: Check for architectural side effects (Reg Write, Mem Read, Mem Write).
     // A NOP will have all these control signals disabled (false).
     if (ex_mem_reg_.reg_write || ex_mem_reg_.freg_write || ex_mem_reg_.mem_read ||
-        ex_mem_reg_.mem_write)
+        ex_mem_reg_.mem_write || ex_mem_reg_.vector_write)
         return false;
 
     // MEM/WB: Check for final architectural side effect (GPR or FPR write).
-    if (mem_wb_reg_.reg_write || mem_wb_reg_.freg_write)
+    if (mem_wb_reg_.reg_write || mem_wb_reg_.freg_write || mem_wb_reg_.vector_write)
         return false;
 
     return true;
@@ -869,6 +897,9 @@ void RV5StageVM_Base::Undo()
         case 2:
             registers_.WriteFpr(change.reg_index, change.old_value);
             break;
+        case 3:
+            registers_.WriteVector(change.reg_index, change.old_vector_value);
+            break;
         default:
             break;
         }
@@ -890,6 +921,8 @@ void RV5StageVM_Base::Undo()
     instructions_retired_ = last.old_instructions_retired;
     stall_cycles_ = last.old_stall_cycles;
     branch_mispredictions_ = last.old_branch_mispredictions;
+    vector_sew_ = last.old_vector_sew;
+    vector_vl_ = last.old_vector_vl;
 
     if_id_reg_ = last.pipeline_register_change.old_if_id_reg;
     id_ex_reg_ = last.pipeline_register_change.old_id_ex_reg;
@@ -932,6 +965,9 @@ void RV5StageVM_Base::Redo()
         case 2:
             registers_.WriteFpr(change.reg_index, change.new_value);
             break;
+        case 3:
+            registers_.WriteVector(change.reg_index, change.new_vector_value);
+            break;
         default:
             break;
         }
@@ -950,6 +986,8 @@ void RV5StageVM_Base::Redo()
     instructions_retired_ = next.new_instructions_retired;
     stall_cycles_ = next.new_stall_cycles;
     branch_mispredictions_ = next.new_branch_mispredictions;
+    vector_sew_ = next.new_vector_sew;
+    vector_vl_ = next.new_vector_vl;
 
     if_id_reg_ = next.pipeline_register_change.new_if_id_reg;
     id_ex_reg_ = next.pipeline_register_change.new_id_ex_reg;

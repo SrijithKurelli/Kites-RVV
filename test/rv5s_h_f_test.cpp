@@ -17,6 +17,8 @@
 // }
 
 #include <gtest/gtest.h>
+#include <array>
+#include <cstdint>
 #include "processor/rv5s/rv5s_processor_base.h"
 #include "processor/rv5s/rv5s_processor_h_nf.h"
 #include "processor/rv5s/rv5s_processor_h_f.h"
@@ -99,4 +101,85 @@ TEST(RV5StageVM_H_F_TEST, r_m_forwarding)
 {
     auto vm = runHazardProgram("../examples/R_M_hazard.s");
     EXPECT_EQ(vm->registers_.ReadGpr(9), 55);
+}
+
+namespace
+{
+std::array<uint8_t, 16> packVector32(const std::array<int32_t, 4> &values)
+{
+    std::array<uint8_t, 16> bytes{};
+    for (size_t lane = 0; lane < values.size(); ++lane)
+    {
+        const uint32_t value = static_cast<uint32_t>(values[lane]);
+        for (size_t byte = 0; byte < 4; ++byte)
+            bytes[lane * 4 + byte] = static_cast<uint8_t>((value >> (byte * 8)) & 0xFFu);
+    }
+    return bytes;
+}
+
+std::array<int32_t, 4> unpackVector32(const std::array<uint8_t, 16> &bytes)
+{
+    std::array<int32_t, 4> values{};
+    for (size_t lane = 0; lane < values.size(); ++lane)
+    {
+        uint32_t value = 0;
+        for (size_t byte = 0; byte < 4; ++byte)
+            value |= static_cast<uint32_t>(bytes[lane * 4 + byte]) << (byte * 8);
+        values[lane] = static_cast<int32_t>(value);
+    }
+    return values;
+}
+} // namespace
+
+TEST(RV5StageVM_H_F_TEST, vectorSubsetExecutesWithMaskAndVectorDependencyStalls)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    vm.registers_.WriteVector(0, packVector32({1, 0, 1, 0}));
+    vm.registers_.WriteVector(1, packVector32({1, 2, 3, 4}));
+    vm.registers_.WriteVector(2, packVector32({10, 20, 30, 40}));
+    vm.registers_.WriteVector(3, packVector32({-5, -5, -5, -5}));
+    vm.registers_.WriteVector(4, packVector32({-7, -7, -7, -7}));
+
+    const auto program = assemble("../examples/vector/vector_pipeline_hf_subset.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    EXPECT_EQ(vm.registers_.ReadGpr(5), 4u);
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(3)),
+              (std::array<int32_t, 4>{11, -5, 33, -5}));
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(4)),
+              (std::array<int32_t, 4>{110, -7, 990, -7}));
+    EXPECT_EQ(unpackVector32(vm.registers_.ReadVector(5)),
+              (std::array<int32_t, 4>{109, -9, 987, -11}));
+}
+
+TEST(RV5StageVM_H_F_TEST, vectorRegisterWritebackSupportsUndoAndRedo)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    const auto initial = packVector32({-5, -5, -5, -5});
+    const auto expected = packVector32({11, 22, 33, 44});
+    vm.registers_.WriteVector(1, packVector32({1, 2, 3, 4}));
+    vm.registers_.WriteVector(2, packVector32({10, 20, 30, 40}));
+    vm.registers_.WriteVector(3, initial);
+
+    const auto program = assemble("../examples/vector/vector_pipeline_hf_undo.s");
+    vm.LoadProgram(program);
+
+    bool committed = false;
+    for (int cycle = 0; cycle < 16; ++cycle)
+    {
+        vm.Step();
+        if (vm.registers_.ReadVector(3) == expected)
+        {
+            committed = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(committed);
+    vm.Undo();
+    EXPECT_EQ(vm.registers_.ReadVector(3), initial);
+    vm.Redo();
+    EXPECT_EQ(vm.registers_.ReadVector(3), expected);
 }
