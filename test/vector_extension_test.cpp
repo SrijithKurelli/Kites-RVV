@@ -724,7 +724,9 @@ TEST(VectorExtension, AssemblerEncodesReductionsAndMaskPopulationCount)
     EXPECT_EQ(program.text_buffer[5], reduction(0b000111, 8));
     EXPECT_EQ(program.text_buffer[6],
               (0b010000u << 26) | (1u << 25) | (4u << 20) | (0b10000u << 15) |
-                  (0b110u << 12) | (9u << 7) | 0x57u);
+                  (0b010u << 12) | (9u << 7) | 0x57u);
+    EXPECT_EQ(program.text_buffer[6], 0x424824D7u); // Independently checked RVV 1.0 OP-MVV word
+    EXPECT_EQ((program.text_buffer[6] >> 12) & 0x7u, 0b010u);
     EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[0]),
               "vredsum.vs v1, v2, v3");
     EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[6]),
