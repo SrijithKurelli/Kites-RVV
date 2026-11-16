@@ -106,6 +106,8 @@ struct EX_MEM_Register
     std::array<uint8_t, 16> vector_result{};
     uint8_t vector_rd {0};
     bool vector_write {false};
+    uint8_t prev_vector_rd {0};
+    bool prev_vector_write {false};
     // Branching info calculated in EX stage
     bool     branch_taken      {false};
     bool     prev_branch_taken {false};  // we'll use this for hightlighting purposes
@@ -140,6 +142,8 @@ struct EX_MEM_Register
         vector_result.fill(0);
         vector_rd = 0;
         vector_write = false;
+        prev_vector_rd = 0;
+        prev_vector_write = false;
 
         branch_taken      = false;
         prev_branch_taken = false;
@@ -175,10 +179,13 @@ struct MEM_WB_Register
     uint64_t f_alu_result  {0};  // FPR Write Data (F-ALU result)
     uint8_t  frd           {0};  // FPR Destination register index
 
-    // Vector writeback payload (used by the H_F pipeline subset).
+    // Vector writeback payload and one-cycle forwarding history.
     std::array<uint8_t, 16> vector_result{};
     uint8_t vector_rd {0};
     bool vector_write {false};
+    std::array<uint8_t, 16> prev_vector_result{};
+    uint8_t prev_vector_rd {0};
+    bool prev_vector_write {false};
 
     uint64_t prev_f_memory_data {0};  // Previous FPR Memory data (for forwarding)
     uint64_t prev_f_alu_result {0};   // Previous FPR ALU
@@ -210,6 +217,9 @@ struct MEM_WB_Register
         vector_result.fill(0);
         vector_rd = 0;
         vector_write = false;
+        prev_vector_result.fill(0);
+        prev_vector_rd = 0;
+        prev_vector_write = false;
 
         prev_f_memory_data = 0;
         prev_f_alu_result  = 0;
