@@ -1540,7 +1540,7 @@ std::string disassemble(uint32_t instruction)
         }
         if (funct3 == 0b110 && funct6 == 0b100101)
             return "vmul.vx " + vr(rd) + ", " + vr(rs2) + ", " + xr(rs1) + mask_suffix;
-        if (funct3 == 0b110 && funct6 == 0b010000 && rs1 == 0b10000)
+        if (funct3 == 0b010 && funct6 == 0b010000 && rs1 == 0b10000)
             return "vcpop.m " + xr(rd) + ", " + vr(rs2) + mask_suffix;
         return "<unknown-vector>";
     }
