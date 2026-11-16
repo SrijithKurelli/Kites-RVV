@@ -264,6 +264,344 @@ void RV5StageVM_Base::pipeline_decode()
     id_ex_reg_.alu_op     = control_unit_.GetAluOp();
 }
 
+
+RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwarding_enabled)
+{
+    constexpr uint8_t kVectorOpcode = 0x57u;
+    RV5VectorExecutionResult execution;
+    const uint32_t instruction = id_ex_reg_.instruction;
+    if ((instruction & 0x7Fu) != kVectorOpcode)
+        throw std::runtime_error("Invalid vector instruction in RV5 pipeline");
+
+    const uint8_t funct3 = (instruction >> 12) & 0x7u;
+    const uint8_t funct6 = (instruction >> 26) & 0x3Fu;
+    const uint8_t vd = (instruction >> 7) & 0x1Fu;
+    const uint8_t rs1 = (instruction >> 15) & 0x1Fu;
+    const uint8_t vs2 = (instruction >> 20) & 0x1Fu;
+    const bool vm = ((instruction >> 25) & 1u) != 0;
+
+    if (funct3 == 0b111)
+    {
+        const uint32_t format = instruction >> 30;
+        if (format == 0b10)
+            throw std::runtime_error("vsetvl is not supported by the RV5 vector subset");
+        const bool immediate_avl = format == 0b11;
+        const uint16_t zimm = static_cast<uint16_t>(
+            (instruction >> 20) & (immediate_avl ? 0x3FFu : 0x7FFu));
+        if (zimm != 0 && zimm != 8 && zimm != 16 && zimm != 24)
+            throw std::runtime_error(
+                "Unsupported vector configuration: RV5 supports LMUL=1, SEW 8/16/32/64");
+
+        const uint8_t new_sew = static_cast<uint8_t>(8u << ((zimm >> 3) & 0x7u));
+        const uint8_t vlmax = static_cast<uint8_t>(128u / new_sew);
+        uint64_t avl = 0;
+        if (immediate_avl)
+            avl = rs1;
+        else if (rs1 == 0)
+        {
+            if (vd != 0)
+                avl = UINT64_MAX;
+            else
+            {
+                const uint8_t old_vlmax = static_cast<uint8_t>(128u / vector_sew_);
+                if (vlmax != old_vlmax)
+                    throw std::runtime_error(
+                        "vsetvli x0, x0 requires unchanged VLMAX (reserved form)");
+                avl = vector_vl_;
+            }
+        }
+        else
+            avl = forwarding_enabled ? forward_gpr(rs1, id_ex_reg_.reg1_data)
+                                     : id_ex_reg_.reg1_data;
+
+        const uint8_t new_vl = static_cast<uint8_t>(std::min<uint64_t>(avl, vlmax));
+        vector_sew_ = new_sew;
+        vector_vl_ = new_vl;
+        execution.scalar_result = new_vl;
+        return execution;
+    }
+
+    const bool vector_popcount_mask =
+        funct3 == 0b010 && funct6 == 0b010000 && rs1 == 0b10000;
+    const auto read_vector = [&](uint8_t reg)
+    {
+        if (forwarding_enabled)
+        {
+            if (ex_mem_reg_.vector_write && ex_mem_reg_.vector_rd == reg)
+                return ex_mem_reg_.vector_result;
+            if (mem_wb_reg_.prev_vector_write && mem_wb_reg_.prev_vector_rd == reg)
+                return mem_wb_reg_.prev_vector_result;
+        }
+        return registers_.ReadVector(reg);
+    };
+
+    const auto predicate = read_vector(0);
+    const auto lane_is_active = [&](size_t lane)
+    {
+        return vm || ((predicate[lane / 8u] >> (lane % 8u)) & 1u) != 0;
+    };
+
+    // vcpop.m is a mask-register source operation and is allowed to read v0
+    // both as its source and as the optional execution predicate.
+    if (vector_popcount_mask)
+    {
+        const auto source_mask = read_vector(vs2);
+        uint64_t count = 0;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            const bool source_bit =
+                ((source_mask[lane / 8u] >> (lane % 8u)) & 1u) != 0;
+            if (source_bit && lane_is_active(lane))
+                ++count;
+        }
+        execution.scalar_result = count;
+        return execution;
+    }
+
+    const bool reduction =
+        funct3 == 0b010 &&
+        (funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
+         funct6 == 0b000011 || funct6 == 0b000101 || funct6 == 0b000111);
+    const bool unary_bit_count =
+        funct3 == 0b010 && funct6 == 0b010010 &&
+        (rs1 == 0b01100 || rs1 == 0b01101 || rs1 == 0b01110);
+    const bool vector_vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
+    const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
+    const bool mask_comparison =
+        funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
+
+    if (!vm)
+    {
+        const bool vs2_is_data =
+            funct3 == 0b000 || reduction || unary_bit_count ||
+            vector_vector_multiply || vector_scalar_multiply;
+        const bool vs1_is_data =
+            funct3 == 0b000 || reduction || vector_vector_multiply;
+        if ((vs2_is_data && vs2 == 0) || (vs1_is_data && rs1 == 0))
+            throw std::runtime_error(
+                "Masked vector data sources cannot overlap v0 (mask EEW differs from data EEW)");
+        if (vd == 0 && !mask_comparison && !reduction)
+            throw std::runtime_error(
+                "Masked vector destination cannot overlap v0 unless it writes a mask/reduction");
+    }
+
+    if (vector_sew_ != 8 && vector_sew_ != 16 &&
+        vector_sew_ != 32 && vector_sew_ != 64)
+        throw std::runtime_error("Invalid SEW in RV5 vector state");
+    const size_t element_bytes = vector_sew_ / 8u;
+    const uint64_t element_mask = vector_sew_ == 64
+        ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
+    if (vector_vl_ > 128u / vector_sew_)
+        throw std::runtime_error("VL exceeds VLMAX in RV5 vector state");
+
+    const auto read_element = [element_bytes](const std::array<uint8_t, 16> &bytes,
+                                               size_t lane)
+    {
+        uint64_t value = 0;
+        const size_t offset = lane * element_bytes;
+        for (size_t byte = 0; byte < element_bytes; ++byte)
+            value |= static_cast<uint64_t>(bytes[offset + byte]) << (8u * byte);
+        return value;
+    };
+    const auto write_element = [element_bytes](std::array<uint8_t, 16> &bytes,
+                                                size_t lane, uint64_t value)
+    {
+        const size_t offset = lane * element_bytes;
+        for (size_t byte = 0; byte < element_bytes; ++byte)
+            bytes[offset + byte] =
+                static_cast<uint8_t>((value >> (8u * byte)) & 0xFFu);
+    };
+    const auto signed_less = [this](uint64_t lhs, uint64_t rhs)
+    {
+        const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1u);
+        const bool lhs_negative = (lhs & sign_bit) != 0;
+        const bool rhs_negative = (rhs & sign_bit) != 0;
+        if (lhs_negative != rhs_negative)
+            return lhs_negative;
+        return lhs < rhs;
+    };
+
+    if (vector_scalar_multiply)
+    {
+        const auto source = read_vector(vs2);
+        auto result = read_vector(vd);
+        const uint64_t scalar =
+            (forwarding_enabled ? forward_gpr(rs1, id_ex_reg_.reg1_data)
+                                : id_ex_reg_.reg1_data) & element_mask;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            write_element(result, lane,
+                          (read_element(source, lane) * scalar) & element_mask);
+        }
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
+    }
+
+    if (vector_vector_multiply)
+    {
+        const auto lhs = read_vector(vs2);
+        const auto rhs = read_vector(rs1);
+        auto result = read_vector(vd);
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            write_element(result, lane,
+                          (read_element(lhs, lane) * read_element(rhs, lane)) & element_mask);
+        }
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
+    }
+
+    if (unary_bit_count)
+    {
+        const auto source = read_vector(vs2);
+        auto result = read_vector(vd);
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t value = read_element(source, lane);
+            uint64_t count = 0;
+            if (rs1 == 0b01100) // vclz.v
+            {
+                for (size_t bit = vector_sew_; bit > 0; --bit)
+                {
+                    if (((value >> (bit - 1u)) & 1u) != 0)
+                        break;
+                    ++count;
+                }
+            }
+            else if (rs1 == 0b01101) // vctz.v
+            {
+                for (size_t bit = 0; bit < vector_sew_; ++bit)
+                {
+                    if (((value >> bit) & 1u) != 0)
+                        break;
+                    ++count;
+                }
+            }
+            else // vcpop.v
+            {
+                for (size_t bit = 0; bit < vector_sew_; ++bit)
+                    count += (value >> bit) & 1u;
+            }
+            write_element(result, lane, count);
+        }
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
+    }
+
+    if (reduction)
+    {
+        if (vector_vl_ == 0)
+            return execution;
+        const auto source = read_vector(vs2);
+        const auto seed = read_vector(rs1);
+        auto result = read_vector(vd);
+        uint64_t accumulator = read_element(seed, 0);
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t value = read_element(source, lane);
+            switch (funct6)
+            {
+            case 0b000000: accumulator = (accumulator + value) & element_mask; break;
+            case 0b000001: accumulator &= value; break;
+            case 0b000010: accumulator |= value; break;
+            case 0b000011: accumulator ^= value; break;
+            case 0b000101: if (signed_less(value, accumulator)) accumulator = value; break;
+            case 0b000111: if (signed_less(accumulator, value)) accumulator = value; break;
+            default: break;
+            }
+        }
+        write_element(result, 0, accumulator & element_mask);
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
+    }
+
+    if (funct3 != 0b000)
+        throw std::runtime_error("Unsupported vector operand format in RV5 pipeline subset");
+
+    const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
+    const bool arithmetic_or_logic =
+        funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
+        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011 ||
+        funct6 == 0b010100 || funct6 == 0b010101;
+    if (!comparison && !arithmetic_or_logic)
+        throw std::runtime_error("Unsupported vector arithmetic/logical instruction in RV5");
+
+    const auto lhs = read_vector(vs2);
+    const auto rhs = read_vector(rs1);
+    auto result = read_vector(vd);
+    for (size_t lane = 0; lane < vector_vl_; ++lane)
+    {
+        if (!lane_is_active(lane))
+            continue;
+        const uint64_t a = read_element(lhs, lane);
+        const uint64_t b = read_element(rhs, lane);
+        if (comparison)
+        {
+            bool match = false;
+            switch (funct6)
+            {
+            case 0b011000: match = a == b; break;
+            case 0b011001: match = a != b; break;
+            case 0b011010: match = a < b; break;
+            case 0b011011: match = signed_less(a, b); break;
+            default: break;
+            }
+            const uint8_t bit = static_cast<uint8_t>(1u << (lane % 8u));
+            if (match)
+                result[lane / 8u] |= bit;
+            else
+                result[lane / 8u] &= static_cast<uint8_t>(~bit);
+        }
+        else
+        {
+            uint64_t value = 0;
+            switch (funct6)
+            {
+            case 0b000000: value = (a + b) & element_mask; break; // vadd.vv
+            case 0b000001: value = a & (~b) & element_mask; break; // vandn.vv
+            case 0b000010: value = (a - b) & element_mask; break; // vsub.vv
+            case 0b001001: value = a & b; break; // vand.vv
+            case 0b001010: value = a | b; break; // vor.vv
+            case 0b001011: value = a ^ b; break; // vxor.vv
+            case 0b010100: // vror.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = shift == 0 ? a : ((a >> shift) | (a << (vector_sew_ - shift))) & element_mask;
+                break;
+            }
+            case 0b010101: // vrol.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = shift == 0 ? a : ((a << shift) | (a >> (vector_sew_ - shift))) & element_mask;
+                break;
+            }
+            default: break;
+            }
+            write_element(result, lane, value);
+        }
+    }
+    execution.vector_result = result;
+    execution.vector_rd = vd;
+    execution.vector_write = true;
+    return execution;
+}
+
 void RV5StageVM_Base::memory_writeback()
 {
     auto read_bytes = [&](uint64_t addr, size_t byte_count)
