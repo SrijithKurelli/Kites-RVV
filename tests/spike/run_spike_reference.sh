@@ -3,10 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 RISCV_CC="${RISCV_CC:-riscv64-unknown-elf-gcc}"
-RISCV_NM="${RISCV_NM:-riscv64-unknown-elf-nm}"
 SPIKE_BIN="${SPIKE_BIN:-spike}"
 
-for tool in "$RISCV_CC" "$RISCV_NM" "$SPIKE_BIN" grep awk timeout; do
+for tool in "$RISCV_CC" "$SPIKE_BIN" grep timeout; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "Required tool not found: $tool" >&2
         exit 2
@@ -31,15 +30,11 @@ LOG="$WORK_DIR/spike.log"
     -o "$ELF" \
     "$SCRIPT_DIR/vector_subset_reference.S"
 
-DONE_PC_HEX="$("$RISCV_NM" -n "$ELF" | awk '$3 == "_done" { print $1; exit }')"
-if [[ -z "$DONE_PC_HEX" ]]; then
-    echo "Could not locate _done in the linked Spike reference ELF" >&2
-    exit 2
-fi
-# Spike's debugger parses the final "until" operand as hexadecimal (base 16).
-# Keep nm's hexadecimal symbol value in that form; decimal conversion is incorrect.
-cat > "$COMMANDS" <<EOF
-until pc 0 $DONE_PC_HEX
+# Stop when the final reduction result is committed to s0. This is an
+# architectural completion condition, so it does not depend on ELF symbol
+# addresses or the simulator's initial PC mapping.
+cat > "$COMMANDS" <<'EOF'
+until reg 0 s0 fffffffffffffffe
 reg 0 a0
 reg 0 a1
 reg 0 a2
@@ -52,7 +47,8 @@ reg 0 s0
 quit
 EOF
 
-# Spike's V profile implies Zve64d and Zvl128b: ELEN=64, VLEN=128.
+# Spike's interactive until loop advances in bounded instruction batches. A
+# timeout remains as a guard in case the expected result is never produced.
 set +e
 timeout --signal=TERM --kill-after=5s 60s \
     "$SPIKE_BIN" --isa=rv64gcv -d --debug-cmd="$COMMANDS" "$ELF" >"$LOG" 2>&1
