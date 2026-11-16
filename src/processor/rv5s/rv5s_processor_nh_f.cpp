@@ -214,7 +214,13 @@ void RV5StageProcessorNHF::pipeline_execute()
     bool is_f_instruction = instruction_set::isFInstruction(instruction);
     bool is_d_instruction = instruction_set::isDInstruction(instruction);
 
-    if (is_f_instruction)
+    RV5VectorExecutionResult vector_execution;
+    if ((instruction & 0x7Fu) == 0x57u)
+    {
+        vector_execution = execute_vector_instruction(true);
+        alu_result = vector_execution.scalar_result;
+    }
+    else if (is_f_instruction)
     {
         alu_result = pipeline_execute_float();
     }
@@ -335,10 +341,15 @@ void RV5StageProcessorNHF::pipeline_execute()
     ex_mem_reg_.prev_rd = ex_mem_reg_.rd;
     ex_mem_reg_.prev_freg_write = ex_mem_reg_.freg_write;
     ex_mem_reg_.prev_frd = ex_mem_reg_.frd;
+    ex_mem_reg_.prev_vector_write = ex_mem_reg_.vector_write;
+    ex_mem_reg_.prev_vector_rd = ex_mem_reg_.vector_rd;
     ex_mem_reg_.pc = id_ex_reg_.pc;
     ex_mem_reg_.instruction = id_ex_reg_.instruction;
     ex_mem_reg_.alu_result = alu_result;
     ex_mem_reg_.f_alu_result = (is_f_instruction || is_d_instruction) ? alu_result : 0;
+    ex_mem_reg_.vector_result = vector_execution.vector_result;
+    ex_mem_reg_.vector_rd = vector_execution.vector_rd;
+    ex_mem_reg_.vector_write = vector_execution.vector_write;
     ex_mem_reg_.rd = id_ex_reg_.rd;
     ex_mem_reg_.frd = id_ex_reg_.frd;
     // NOTE: reg2_data and freg2_data are set inside the integer/FP execute
