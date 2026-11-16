@@ -3,14 +3,14 @@
 ## Purpose
 
 This optional check executes a small bare-metal RVV program in Spike, an
-independent RISC-V ISA simulator, and checks its scalar-register results against
-the golden values already asserted by the Kites RVSS tests.
+independent RISC-V ISA simulator, and checks architectural results against the
+golden values already asserted by the Kites RVSS tests.
 
 It covers a narrow common subset:
-- vsetivli with immediate AVL 4, SEW=32, LMUL=1;
-- vle32.v and vse32.v;
-- vmul.vv and vmul.vx;
-- vredsum.vs.
+- `vsetivli` with immediate AVL 4, SEW=32, LMUL=1;
+- `vle32.v` and `vse32.v`;
+- `vmul.vv` and `vmul.vx`;
+- `vredsum.vs`.
 
 The inputs are lhs=[2,-3,4,5], rhs=[6,7,-2,3], and scalar multiplier -3.
 Expected results are:
@@ -20,12 +20,18 @@ Expected results are:
 
 The reference program is assembled independently by the RISC-V GNU toolchain.
 It is not assembled by Kites and does not use Kites' instruction encoder. Spike
-executes it with the standard RVV 1.0 V extension. The workflow pins Spike to upstream commit
-`118480991eb16c6a6f40b94fdc35acc9da2ceacd` (reported by its VERSION file as
-`1.1.1-dev`) and uses the standard `rv64gcv` profile. Spike's V extension implies
-Zve64d and Zvl128b, giving ELEN=64 and VLEN=128 for this reference
-configuration. This matches the vector register length and element-width
-capabilities configured by the Kites RVSS subset.
+executes it with the standard RVV 1.0 V extension. The workflow pins Spike to
+upstream commit `118480991eb16c6a6f40b94fdc35acc9da2ceacd` (reported by its
+VERSION file as `1.1.1-dev`) and uses the standard `rv64gcv` profile. Spike's
+V extension implies Zve64d and Zvl128b, giving ELEN=64 and VLEN=128 for this
+reference configuration. This matches the vector register length and
+element-width capabilities configured by the Kites RVSS subset.
+
+The assembly reference program initializes its reduction seed explicitly and
+checks every lane of both multiplication results plus the reduction result.
+It reports pass/fail through Spike's standard HTIF `tohost`/`fromhost`
+mailbox. This avoids debugger-command parsing and makes the process exit status
+the result of the architectural checks.
 
 ## Run locally on Ubuntu 24.04
 
@@ -66,9 +72,10 @@ tests/spike/run_spike_reference.sh
 ```
 
 The script compiles `vector_subset_reference.S` into a bare-metal ELF with a
-linker script at `0x80000000`, starts Spike in debug mode, runs until the program
-reaches its `_done` label, reads the result GPRs, and compares all nine values
-to the expected 64-bit representations.
+linker script at `0x80000000`, runs Spike without interactive debugger mode,
+and relies on the assembly program's architectural assertions and HTIF exit
+code. Every output lane and the final reduction are checked before success is
+signalled.
 
 ## CI
 

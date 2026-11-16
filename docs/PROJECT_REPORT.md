@@ -96,8 +96,11 @@ partial store. Strided memory undo/redo is integrated with the existing history.
 ## 4. Tooling and state inspection
 
 Assembler, decoder/disassembler, and RVSS execution are connected for the
-supported mnemonics. The GUI's vector register view and the CLI's `regs`
-command expose the 32 vector registers. The CLI's `info` command reports
+supported mnemonics. The GUI's vector register view exposes the 32 vector registers as comma-separated
+SEW-sized elements, with selectable hexadecimal, binary, and signed-decimal
+display and a presentation-only 8/16/32/64-bit lane-width selector. Vector
+rows wrap instead of eliding the 128-bit value. The CLI's `regs`
+command exposes the 32 vector registers. The CLI's `info` command reports
 VLEN, LMUL, SEW, VL, and VLMAX for RVSS; the JSON register dump contains
 `vec_registers`.
 
@@ -184,7 +187,12 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 
 ## 7. Known limitations
 
-- Vector execution is implemented only in the single-cycle RVSS processor.
+- The full documented vector subset is implemented in the single-cycle RVSS
+  processor. A smaller experimental subset is implemented in the H_F
+  five-stage pipeline: vector configuration, `vadd.vv`, `vsub.vv`,
+  `vmul.vv`, and `vmul.vx`, with masked arithmetic, WB vector writeback,
+  dependency stalls, and vector undo/redo. Other pipeline variants remain
+  unsupported for vector execution.
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
   8, 16, 32, and 64 bits.
 - Only the selected integer arithmetic, multiplication, logical, comparison, reduction,
@@ -207,12 +215,9 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
   listed above.
 - The abstract timing model does not integrate vector instructions into the
   five-stage pipeline variants and is not a cycle-accurate processor model.
-  The five-stage pipeline path currently tracks GPR/FPR state and hazards only;
-  safe vector support needs coordinated vector state, decode, execution,
-  writeback and dependency logic.
-  An architecture audit found that pipeline registers and hazard detection
-  currently track GPR/FPR state only; a correct vector pipeline extension needs
-  coordinated vector state, decode, execution, writeback and hazard changes.
+  The H_F pipeline has an experimental subset, but pipeline support remains
+  incomplete: vector memory, reductions, comparisons, and the additional
+  vector logical/bit-manipulation operations are not implemented there.
 
 ## 8. Stretch work and deferred items
 
@@ -221,7 +226,11 @@ performance modeling, pipeline integration, and independent reference
 comparisons as stretch work. The selected bit-count, AND-NOT, rotate, strided-
 memory, multiplication and composed-kernel subsets have been implemented and
 CI-verified. The abstract vector timing model is implemented and CI-verified.
-Remaining Zvbb operations, indexed/segment memory, and integration into the
-five-stage pipeline remain deferred. The independent Spike reference workflow
-has been added; its first CI validation is pending.
+Remaining Zvbb operations, indexed/segment memory, and broad vector support
+across the five-stage pipeline remain deferred. The independent Spike reference
+workflow has been added, but its current result comparison is failing; the
+debugger-based comparison is being replaced with assembly-side result assertions
+and an HTIF pass/fail mailbox. The normal RVV build, example smoke tests, and
+CTest suite passed on CI run #43842617996 (388 tests executed, zero failures,
+one skipped).
 The limitations above make those boundaries explicit.

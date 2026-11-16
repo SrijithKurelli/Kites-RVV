@@ -241,13 +241,17 @@ See `examples/vector/README.md` for commands and expected results. The separate 
 
 ## Current limitations
 
-- Vector instructions are implemented only in the RVSS single-cycle processor.
-  The five-stage pipeline processors do not support them.
+- The complete documented vector subset is implemented in the RVSS single-cycle
+  processor. The H_F five-stage pipeline has a smaller experimental subset:
+  `vsetvli`, `vsetivli`, `vadd.vv`, `vsub.vv`, `vmul.vv`, and `vmul.vx`,
+  including masked forms for arithmetic, vector-result writeback, conservative
+  dependency stalls, and undo/redo. Other pipeline variants do not support
+  vector execution.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
 - Selected integer multiplication (`vmul.vv` and `vmul.vx`), arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride/strided memory operations support unmasked and `v0.t` masked forms in RVSS.
 - Unit-stride and selected strided vector loads/stores require `EEW=SEW`; differing element widths, indexed/segment operations, and nonzero `nf` are not implemented.
 - Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
-- Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Indexed/segment memory, pipeline support, and several RVV operations remain unimplemented.
+- Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Indexed/segment memory, broad pipeline vector coverage, and several RVV operations remain unimplemented.
 
 ## Example load–compute–store sequence
 

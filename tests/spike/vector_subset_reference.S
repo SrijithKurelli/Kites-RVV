@@ -1,6 +1,5 @@
     .section .text.start
     .globl _start
-    .globl _done
     .type _start, @function
 _start:
     la      t0, lhs
@@ -22,30 +21,65 @@ _start:
     la       t5, result_vx
     vse32.v  v4, (t5)
 
-    # 12 - 21 - 8 + 15 = -2; v0 is zero-initialized by Spike.
+    # Explicitly initialize the reduction seed. Do not rely on reset values.
+    la       t6, reduction_seed
+    vle32.v  v0, (t6)
     vredsum.vs v5, v3, v0
+
+    # Store only the reduced element.
     vsetivli x0, 1, e32, m1, tu, mu
     la       t6, result_sum
     vse32.v  v5, (t6)
 
-    # Bring outputs into GPRs so the Spike debugger can report them.
+    # Independently assert every vector-vector product lane.
     la       t0, result_vv
-    lw       a0, 0(t0)
-    lw       a1, 4(t0)
-    lw       a2, 8(t0)
-    lw       a3, 12(t0)
+    lw       t2, 0(t0)
+    li       t1, 12
+    bne      t2, t1, _fail
+    lw       t2, 4(t0)
+    li       t1, -21
+    bne      t2, t1, _fail
+    lw       t2, 8(t0)
+    li       t1, -8
+    bne      t2, t1, _fail
+    lw       t2, 12(t0)
+    li       t1, 15
+    bne      t2, t1, _fail
 
+    # Independently assert every vector-scalar product lane.
     la       t0, result_vx
-    lw       a4, 0(t0)
-    lw       a5, 4(t0)
-    lw       a6, 8(t0)
-    lw       a7, 12(t0)
+    lw       t2, 0(t0)
+    li       t1, -6
+    bne      t2, t1, _fail
+    lw       t2, 4(t0)
+    li       t1, 9
+    bne      t2, t1, _fail
+    lw       t2, 8(t0)
+    li       t1, -12
+    bne      t2, t1, _fail
+    lw       t2, 12(t0)
+    li       t1, -15
+    bne      t2, t1, _fail
 
+    # Assert the reduction result.
     la       t0, result_sum
-    lw       s0, 0(t0)
+    lw       t2, 0(t0)
+    li       t1, -2
+    bne      t2, t1, _fail
 
-_done:
-    j _done
+_pass:
+    la       t0, tohost
+    li       t1, 1              # HTIF test-pass code.
+    sd       t1, 0(t0)
+1:
+    j        1b
+
+_fail:
+    la       t0, tohost
+    li       t1, 3              # HTIF test-fail code (exit status 1).
+    sd       t1, 0(t0)
+2:
+    j        2b
 
     .section .data
     .balign 16
@@ -53,9 +87,19 @@ lhs:
     .word 2, -3, 4, 5
 rhs:
     .word 6, 7, -2, 3
+reduction_seed:
+    .word 0, 0, 0, 0
 result_vv:
     .word 0, 0, 0, 0
 result_vx:
     .word 0, 0, 0, 0
 result_sum:
     .word 0
+
+    .balign 8
+    .globl tohost
+tohost:
+    .dword 0
+    .globl fromhost
+fromhost:
+    .dword 0
