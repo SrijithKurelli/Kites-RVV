@@ -10,6 +10,7 @@
 
 #include "processor/processor_factory.h"
 #include "processor/rv5s/rv5s_processor_h_f.h"
+#include "processor/rv5s/rv5s_processor_base.h"
 #include "processor/rv5s/rv5s_processor_h_nf.h"
 #include "processor/rv5s/rv5s_processor_nh_f.h"
 #include "processor/rv5s/rv5s_processor_nh_nf.h"
@@ -263,19 +264,26 @@ RegisterFile *ProcessorManager::getRegisterFile() const
 
 bool ProcessorManager::hasVectorState() const
 {
-    return dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get()) != nullptr;
+    return dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get()) != nullptr ||
+           dynamic_cast<const RV5StageVM_Base *>(m_currentProcessor.get()) != nullptr;
 }
 
 uint8_t ProcessorManager::getVectorSew() const
 {
-    const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get());
-    return processor ? processor->vector_sew_ : 0;
+    if (const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get()))
+        return processor->vector_sew_;
+    if (const auto *processor = dynamic_cast<const RV5StageVM_Base *>(m_currentProcessor.get()))
+        return processor->vectorSew();
+    return 0;
 }
 
 uint8_t ProcessorManager::getVectorVl() const
 {
-    const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get());
-    return processor ? processor->vector_vl_ : 0;
+    if (const auto *processor = dynamic_cast<const RVSSProcessor *>(m_currentProcessor.get()))
+        return processor->vector_vl_;
+    if (const auto *processor = dynamic_cast<const RV5StageVM_Base *>(m_currentProcessor.get()))
+        return processor->vectorVl();
+    return 0;
 }
 
 MemoryController *ProcessorManager::getMemoryController() const
