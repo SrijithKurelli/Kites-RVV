@@ -115,6 +115,7 @@ void expectPipelineVectorResults(const Processor &vm)
 
 TEST(RV5VectorPipeline, HazardDetectionAndForwardingExecutesDependentVectorChain)
 {
+    setupVmStateDirectory();
     RV5StageProcessorHF vm;
     seedAndRun(vm, kDependentVectorProgram);
     expectPipelineVectorResults(vm);
@@ -122,6 +123,7 @@ TEST(RV5VectorPipeline, HazardDetectionAndForwardingExecutesDependentVectorChain
 
 TEST(RV5VectorPipeline, HazardDetectionWithoutForwardingStallsForVectorDependencies)
 {
+    setupVmStateDirectory();
     RV5StageProcessorHNF vm;
     seedAndRun(vm, kDependentVectorProgram);
     expectPipelineVectorResults(vm);
@@ -129,6 +131,7 @@ TEST(RV5VectorPipeline, HazardDetectionWithoutForwardingStallsForVectorDependenc
 
 TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionForwardsVectorOperands)
 {
+    setupVmStateDirectory();
     RV5StageProcessorNHF vm;
     seedAndRun(vm, kDependentVectorProgram);
     expectPipelineVectorResults(vm);
@@ -136,6 +139,7 @@ TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionForwardsVectorOperands)
 
 TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingUsesProgrammerScheduledBubbles)
 {
+    setupVmStateDirectory();
     RV5StageProcessorNHNF vm;
     seedAndRun(vm, kScheduledVectorProgram);
     expectPipelineVectorResults(vm);
