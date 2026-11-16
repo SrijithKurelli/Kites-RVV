@@ -569,7 +569,7 @@ void RVSSProcessor::ExecuteVector()
     // vcpop.m is an OPMVX unary operation with a fixed vs1 field of 10000.
 
     
-    if (funct3 == 0b110 && funct6 == 0b010000 && vs1 == 0b10000)
+    if (funct3 == 0b010 && funct6 == 0b010000 && vs1 == 0b10000)
     {
         const auto source_mask = registers_.ReadVector(vs2);
         uint64_t count = 0;
