@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
-RISCV_CC="\${RISCV_CC:-riscv64-unknown-elf-gcc}"
-SPIKE_BIN="\${SPIKE_BIN:-spike}"
-RISCV_NM="\${RISCV_NM:-riscv64-unknown-elf-nm}"
-RISCV_READELF="\${RISCV_READELF:-riscv64-unknown-elf-readelf}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RISCV_CC="${RISCV_CC:-riscv64-unknown-elf-gcc}"
+SPIKE_BIN="${SPIKE_BIN:-spike}"
+RISCV_NM="${RISCV_NM:-riscv64-unknown-elf-nm}"
+RISCV_READELF="${RISCV_READELF:-riscv64-unknown-elf-readelf}"
 
 for tool in "$RISCV_CC" "$RISCV_NM" "$RISCV_READELF" "$SPIKE_BIN" timeout; do
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -33,7 +33,7 @@ LOG="$WORK_DIR/spike.log"
 
 SYMBOLS="$("$RISCV_NM" -n "$ELF")"
 for symbol in _start tohost fromhost; do
-    if ! grep -Eq "[[:space:]]\${symbol}$" <<<"$SYMBOLS"; then
+    if ! grep -Eq "[[:space:]]${symbol}$" <<<"$SYMBOLS"; then
         echo "Reference ELF is missing required symbol: $symbol" >&2
         "$RISCV_READELF" -h "$ELF" >&2
         "$RISCV_NM" -n "$ELF" >&2
@@ -43,7 +43,7 @@ done
 
 ENTRY_POINT="$("$RISCV_READELF" -h "$ELF" | awk '/Entry point address:/ { print $4 }')"
 if [[ ! "$ENTRY_POINT" =~ ^0x[[:xdigit:]]+$ ]] || [[ "$ENTRY_POINT" == "0x0" ]]; then
-    echo "Invalid ELF entry point: \${ENTRY_POINT:-<empty>}" >&2
+    echo "Invalid ELF entry point: ${ENTRY_POINT:-<empty>}" >&2
     "$RISCV_READELF" -h "$ELF" >&2
     exit 4
 fi
@@ -54,7 +54,7 @@ SPIKE_ARGS=(--isa=rv64gcv --disable-dtb --pcs="0:$ENTRY_POINT" -l --log="$LOG")
 
 set +e
 timeout --signal=TERM --kill-after=5s 15s \
-    "$SPIKE_BIN" "\${SPIKE_ARGS[@]}" "$ELF" >/dev/null 2>&1
+    "$SPIKE_BIN" "${SPIKE_ARGS[@]}" "$ELF" >/dev/null 2>&1
 SPIKE_STATUS=$?
 set -e
 
