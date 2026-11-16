@@ -26,6 +26,14 @@ struct RV5StageStepDelta : public StepDelta
     PipelineRegisterChange pipeline_register_change;
 };
 
+struct RV5VectorExecutionResult
+{
+    std::array<uint8_t, 16> vector_result{};
+    uint8_t vector_rd {0};
+    bool vector_write {false};
+    uint64_t scalar_result {0};
+};
+
 class RV5StageVM_Base : public ProcessorBase
 {
   public:
@@ -102,6 +110,8 @@ class RV5StageVM_Base : public ProcessorBase
      * EX/MEM first, then MEM/WB, else the value latched in ID. Used by the forwarding
      * pipelines for FP instructions that read a GPR (load/store base, fcvt from int, fmv.*.x).
      */
+    RV5VectorExecutionResult execute_vector_instruction(bool forwarding_enabled);
+
     uint64_t forward_gpr(uint8_t rs, uint64_t latched) const
     {
         if (rs == 0)
