@@ -40,6 +40,21 @@
      </property>
     </widget>
    </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="vectorElementWidthLabel">
+     <property name="text">
+      <string>Vector Element Width:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QComboBox" name="vectorElementWidth">
+     <item><property name="text"><string>8-bit</string></property></item>
+     <item><property name="text"><string>16-bit</string></property></item>
+     <item><property name="text"><string>32-bit</string></property></item>
+     <item><property name="text"><string>64-bit</string></property></item>
+    </widget>
+   </item>
    <item row="0" column="0" colspan="2">
     <widget class="QWidget" name="sectionsContainer"/>
    </item>

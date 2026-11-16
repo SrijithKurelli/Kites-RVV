@@ -24,11 +24,13 @@ class RegisterModel : public QAbstractTableModel
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 
     void setDisplayBase(Base base);
+    void setVectorElementWidth(int widthBits);
     void changeRegisterFile(RegisterFile *regfile);
 
   private:
     RegisterFile *m_currentRegisterFile;
     Base m_displayBase = Base::Hexadecimal;
+    int m_vectorElementWidth = 32;
     size_t m_highlightedRegisterIndex = -1; // No register highlighted by default
   public slots:
     void updateRegisterValue(size_t regIndex, uint64_t value);

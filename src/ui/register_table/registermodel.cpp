@@ -4,9 +4,64 @@
 #include <QBrush>
 #include <QDebug>
 #include <QPalette>
+#include <QStringList>
 
 namespace Kites
 {
+namespace
+{
+QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int elementWidth)
+{
+    const int elementBytes = elementWidth / 8;
+    const int elementCount = 128 / elementWidth;
+    const uint64_t mask = elementWidth == 64
+        ? UINT64_MAX : ((uint64_t{1} << elementWidth) - 1u);
+
+    QStringList elements;
+    elements.reserve(elementCount);
+    for (int lane = 0; lane < elementCount; ++lane)
+    {
+        uint64_t raw = 0;
+        for (int byte = 0; byte < elementBytes; ++byte)
+        {
+            raw |= static_cast<uint64_t>(bytes[static_cast<size_t>(lane * elementBytes + byte)])
+                   << (8 * byte);
+        }
+        raw &= mask;
+
+        switch (base)
+        {
+        case Base::Decimal:
+        {
+            int64_t signedValue = static_cast<int64_t>(raw);
+            if (elementWidth < 64 && (raw & (uint64_t{1} << (elementWidth - 1))))
+                signedValue = static_cast<int64_t>(raw | ~mask);
+            elements.push_back(QString::number(signedValue));
+            break;
+        }
+        case Base::Hexadecimal:
+            elements.push_back(QString("0x%1").arg(static_cast<qulonglong>(raw),
+                                                    elementWidth / 4, 16, QChar('0')).toUpper());
+            break;
+        case Base::Binary:
+        {
+            QString bits;
+            bits.reserve(elementWidth + elementWidth / 8);
+            for (int bit = elementWidth - 1; bit >= 0; --bit)
+            {
+                bits.append((raw & (uint64_t{1} << bit)) ? QLatin1Char('1') : QLatin1Char('0'));
+                if (bit > 0 && bit % 8 == 0)
+                    bits.append(QLatin1Char(' '));
+            }
+            elements.push_back("0b" + bits);
+            break;
+        }
+        }
+    }
+    return "[" + elements.join(", ") + "]";
+}
+} // namespace
+
 
 RegisterModel::RegisterModel(QObject *parent, RegisterFile *regfile) : QAbstractTableModel(parent)
 {
@@ -161,16 +216,11 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
             }
             else if (row < 96)
             {
-                // Vector registers are 128-bit values; show all 16 bytes in
-                // conventional high-byte-first hexadecimal notation.
+                // Interpret the 128-bit register as SEW-sized little-endian
+                // lanes. The selected display base applies to each lane, and
+                // comma separators make lane boundaries explicit.
                 const auto bytes = m_currentRegisterFile->ReadVector(row - 64);
-                QString value = "0x";
-                for (size_t byte = bytes.size(); byte-- > 0;)
-                {
-                    value += QString("%1").arg(static_cast<qulonglong>(bytes[byte]), 2, 16,
-                                                QChar('0')).toUpper();
-                }
-                return value;
+                return formatVectorValue(bytes, m_displayBase, m_vectorElementWidth);
             }
             else
             {
@@ -182,6 +232,17 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
         }
     }
     return QVariant{};
+}
+
+void RegisterModel::setVectorElementWidth(int widthBits)
+{
+    if (widthBits != 8 && widthBits != 16 && widthBits != 32 && widthBits != 64)
+        return;
+    if (m_vectorElementWidth == widthBits)
+        return;
+    beginResetModel();
+    m_vectorElementWidth = widthBits;
+    endResetModel();
 }
 
 void RegisterModel::changeRegisterFile(RegisterFile *regfile)

@@ -44,6 +44,13 @@ RegisterContainer::RegisterContainer(QWidget *parent, RegisterFile *regfile)
     setupRegisterTable();
 
     ui->displayType->setCurrentText("Hexadecimal");
+    ui->vectorElementWidth->setCurrentText("32-bit");
+    connect(ui->vectorElementWidth, &QComboBox::currentTextChanged, this,
+            [this](const QString &text)
+            {
+                const int width = text.section('-', 0, 0).toInt();
+                m_registerModel->setVectorElementWidth(width);
+            });
     connect(ui->displayType, &QComboBox::currentTextChanged, this,
             [this](const QString &text)
             {
@@ -95,11 +102,25 @@ void RegisterContainer::setupRegisterTable()
         tableView->setModel(makeRangeProxy(spec.firstRow, spec.lastRowExclusive));
         tableView->verticalHeader()->setVisible(false);
         tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        if (spec.title == "Vector")
+        {
+            // Vector values are longer than scalar register values. Wrap at
+            // lane separators and grow rows instead of silently eliding the
+            // tail of a 128-bit register.
+            tableView->setWordWrap(true);
+            tableView->setTextElideMode(Qt::ElideNone);
+            tableView->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+            tableView->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+            connect(m_registerModel, &QAbstractItemModel::modelReset, tableView,
+                    [tableView]() { tableView->resizeRowsToContents(); });
+        }
 
         auto* header = tableView->horizontalHeader();
         header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
         header->setSectionResizeMode(1, QHeaderView::ResizeToContents);
         header->setSectionResizeMode(2, QHeaderView::Stretch);
+        if (spec.title == "Vector")
+            tableView->resizeRowsToContents();
 
         section->setContentWidget(tableView);
         sectionsLayout->addWidget(section);
