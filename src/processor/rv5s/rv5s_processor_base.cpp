@@ -245,6 +245,16 @@ void RV5StageVM_Base::pipeline_decode()
     // GPR forwarding/hazard logic never acts on an FP destination and vice versa.
     id_ex_reg_.reg_write  = is_fp ? instruction_set::fpWritesGpr(instruction)
                                   : control_unit_.GetRegWrite();
+    if ((instruction & 0x7Fu) == 0x57u)
+    {
+        const uint8_t vector_funct3 = (instruction >> 12) & 0x7u;
+        const uint8_t vector_funct6 = (instruction >> 26) & 0x3Fu;
+        const uint8_t vector_vs1 = (instruction >> 15) & 0x1Fu;
+        const bool writes_vl = vector_funct3 == 0b111;
+        const bool writes_mask_count = vector_funct3 == 0b010 &&
+                                       vector_funct6 == 0b010000 && vector_vs1 == 0b10000;
+        id_ex_reg_.reg_write = id_ex_reg_.rd != 0 && (writes_vl || writes_mask_count);
+    }
     id_ex_reg_.freg_write = instruction_set::fpWritesFpr(instruction);
     id_ex_reg_.branch     = control_unit_.GetBranch();
     id_ex_reg_.alu_src    = control_unit_.GetAluSrc();
@@ -453,6 +463,9 @@ void RV5StageVM_Base::pipeline_memory()
     mem_wb_reg_.prev_mem_to_reg  = mem_wb_reg_.mem_to_reg;
     mem_wb_reg_.prev_reg_write   = mem_wb_reg_.reg_write;
     mem_wb_reg_.prev_memory_data = mem_wb_reg_.memory_data;
+    mem_wb_reg_.prev_vector_result = mem_wb_reg_.vector_result;
+    mem_wb_reg_.prev_vector_rd = mem_wb_reg_.vector_rd;
+    mem_wb_reg_.prev_vector_write = mem_wb_reg_.vector_write;
     // Save FPR prev fields for forwarding (mirrors GPR prev fields above)
     mem_wb_reg_.prev_frd           = mem_wb_reg_.frd;
     mem_wb_reg_.prev_f_alu_result  = mem_wb_reg_.f_alu_result;
@@ -672,9 +685,13 @@ void RV5StageVM_Base::pipeline_writeback()
             registers_.WriteGpr(mem_wb_reg_.rd, write_data);
             break;
         }
-        case 0b1010111: // Vector configuration instructions return VL in rd.
+        case 0b1010111: // Vector configuration and vcpop.m return a scalar in rd.
         {
-            if (((mem_wb_reg_.instruction >> 12) & 0x7u) == 0b111u)
+            const uint8_t funct3 = (mem_wb_reg_.instruction >> 12) & 0x7u;
+            const uint8_t funct6 = (mem_wb_reg_.instruction >> 26) & 0x3Fu;
+            const uint8_t vs1 = (mem_wb_reg_.instruction >> 15) & 0x1Fu;
+            if (funct3 == 0b111 ||
+                (funct3 == 0b010 && funct6 == 0b010000 && vs1 == 0b10000))
                 registers_.WriteGpr(mem_wb_reg_.rd, write_data);
             break;
         }
