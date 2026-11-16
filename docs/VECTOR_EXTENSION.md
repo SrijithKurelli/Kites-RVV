@@ -127,7 +127,7 @@ signed comparisons:
 
 ### Mask population count
 
-`vcpop.m rd, vs2` counts set predicate bits in the active portion (`0..vl-1`)
+`vcpop.m rd, vs2` uses the standard OP-MVV encoding (`funct6=0b010000`, `funct3=0b010`, `vs1=0b10000`) and counts set predicate bits in the active portion (`0..vl-1`)
 of vector register `vs2` and writes the count to scalar integer register `rd`.
 An optional trailing `, v0.t` counts only elements enabled by `v0`. This lets an
 assembly sequence count elements selected by a preceding comparison.
