@@ -51,6 +51,9 @@ class RV5StageVM_Base : public ProcessorBase
     void Undo() override;
     void Redo() override;
 
+    uint8_t vectorSew() const noexcept { return vector_sew_; }
+    uint8_t vectorVl() const noexcept { return vector_vl_; }
+
   protected:
     // Pipeline Registers
     IF_ID_Register if_id_reg_;
