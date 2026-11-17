@@ -428,6 +428,8 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
         (rs1 == 0b01100 || rs1 == 0b01101 || rs1 == 0b01110);
     const bool vector_vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
     const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
+    const bool vector_scalar_addsub = funct3 == 0b100 &&
+        (funct6 == 0b000000 || funct6 == 0b000010);
     const bool mask_comparison =
         funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
 
@@ -435,7 +437,7 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     {
         const bool vs2_is_data =
             funct3 == 0b000 || reduction || unary_bit_count ||
-            vector_vector_multiply || vector_scalar_multiply;
+            vector_vector_multiply || vector_scalar_multiply || vector_scalar_addsub;
         const bool vs1_is_data =
             funct3 == 0b000 || reduction || vector_vector_multiply;
         if ((vs2_is_data && vs2 == 0) || (vs1_is_data && rs1 == 0))
@@ -481,6 +483,29 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
             return lhs_negative;
         return lhs < rhs;
     };
+
+    if (vector_scalar_addsub)
+    {
+        const auto source = read_vector(vs2);
+        auto result = read_vector(vd);
+        const uint64_t scalar =
+            (forwarding_enabled ? forward_gpr(rs1, id_ex_reg_.reg1_data)
+                                : id_ex_reg_.reg1_data) & element_mask;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t lhs = read_element(source, lane);
+            const uint64_t value = funct6 == 0b000000
+                ? (lhs + scalar) & element_mask
+                : (lhs - scalar) & element_mask;
+            write_element(result, lane, value);
+        }
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
+    }
 
     if (vector_scalar_multiply)
     {
@@ -598,8 +623,10 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
     const bool arithmetic_or_logic =
         funct6 == 0b000000 || funct6 == 0b000001 || funct6 == 0b000010 ||
-        funct6 == 0b001001 || funct6 == 0b001010 || funct6 == 0b001011 ||
-        funct6 == 0b010100 || funct6 == 0b010101;
+        funct6 == 0b000100 || funct6 == 0b000101 || funct6 == 0b000110 ||
+        funct6 == 0b000111 || funct6 == 0b001001 || funct6 == 0b001010 ||
+        funct6 == 0b001011 || funct6 == 0b010100 || funct6 == 0b010101 ||
+        funct6 == 0b100101 || funct6 == 0b101000 || funct6 == 0b101001;
     if (!comparison && !arithmetic_or_logic)
         throw std::runtime_error("Unsupported vector arithmetic/logical instruction in RV5");
 
@@ -637,6 +664,10 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
             case 0b000000: value = (a + b) & element_mask; break; // vadd.vv
             case 0b000001: value = a & (~b) & element_mask; break; // vandn.vv
             case 0b000010: value = (a - b) & element_mask; break; // vsub.vv
+            case 0b000100: value = std::min(a, b); break; // vminu.vv
+            case 0b000101: value = signed_less(a, b) ? a : b; break; // vmin.vv
+            case 0b000110: value = std::max(a, b); break; // vmaxu.vv
+            case 0b000111: value = signed_less(a, b) ? b : a; break; // vmax.vv
             case 0b001001: value = a & b; break; // vand.vv
             case 0b001010: value = a | b; break; // vor.vv
             case 0b001011: value = a ^ b; break; // vxor.vv
@@ -650,6 +681,27 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
             {
                 const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
                 value = shift == 0 ? a : ((a << shift) | (a >> (vector_sew_ - shift))) & element_mask;
+                break;
+            }
+            case 0b100101: // vsll.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = (a << shift) & element_mask;
+                break;
+            }
+            case 0b101000: // vsrl.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = a >> shift;
+                break;
+            }
+            case 0b101001: // vsra.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = a >> shift;
+                const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1u);
+                if (shift != 0 && (a & sign_bit) != 0)
+                    value |= (element_mask << (vector_sew_ - shift)) & element_mask;
                 break;
             }
             default: break;

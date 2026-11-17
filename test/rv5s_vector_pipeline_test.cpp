@@ -349,6 +349,83 @@ void runPipelineArithmeticForAllSews()
     }
 }
 
+
+template <typename Processor>
+void runPipelineExtendedIntegerOpsForAllSews()
+{
+    for (const unsigned sew : {8u, 16u, 32u, 64u})
+    {
+        setupVmStateDirectory();
+        Processor vm;
+        const size_t vl = std::min<size_t>(4, 128u / sew);
+        const size_t element_bytes = sew / 8u;
+        const uint64_t mask = sew == 64 ? UINT64_MAX : ((uint64_t{1} << sew) - 1u);
+        const uint64_t sign_bit = uint64_t{1} << (sew - 1u);
+        const std::array<uint64_t, 4> lhs = {sign_bit, sign_bit - 1u, mask, 1u};
+        const std::array<uint64_t, 4> rhs = {1u, mask, sign_bit, 0u};
+        vm.registers_.WriteGpr(9, 3u);
+        vm.registers_.WriteVectorByte(0, 0, 0x05u);
+        vm.registers_.WriteVector(1, packSewLanes(sew, lhs));
+        vm.registers_.WriteVector(2, packSewLanes(sew, rhs));
+        for (size_t reg = 6; reg <= 14; ++reg)
+        {
+            std::array<uint8_t, 16> initial{};
+            initial.fill(0xA5u);
+            vm.registers_.WriteVector(reg, initial);
+        }
+
+        std::ostringstream source;
+        source << "vsetivli x0, " << vl << ", " << vtypeForSew(sew) << "\n"
+               << "nop\nnop\n"
+               << "vadd.vx v6, v1, x9, v0.t\n"
+               << "vsub.vx v7, v1, x9\n"
+               << "vmin.vv v8, v1, v2\n"
+               << "vminu.vv v9, v1, v2\n"
+               << "vmax.vv v10, v1, v2\n"
+               << "vmaxu.vv v11, v1, v2\n"
+               << "vsll.vv v12, v1, v2\n"
+               << "vsrl.vv v13, v1, v2\n"
+               << "vsra.vv v14, v1, v2\n"
+               << "nop\nnop\n";
+        vm.LoadProgram(assemblePipelineVectorProgram(source.str()));
+        vm.DebugRun();
+
+        const auto signed_less = [sign_bit](uint64_t a, uint64_t b) {
+            const bool a_negative = (a & sign_bit) != 0;
+            const bool b_negative = (b & sign_bit) != 0;
+            if (a_negative != b_negative)
+                return a_negative;
+            return a < b;
+        };
+        uint64_t sentinel = 0;
+        for (size_t byte = 0; byte < element_bytes; ++byte)
+            sentinel |= uint64_t{0xA5u} << (8u * byte);
+        for (size_t lane = 0; lane < vl; ++lane)
+        {
+            const uint64_t a = lhs[lane], b = rhs[lane];
+            const bool active = ((0x05u >> lane) & 1u) != 0;
+            EXPECT_EQ(readSewLane(vm.registers_, 6, lane, sew), active ? ((a + 3u) & mask) : sentinel);
+            EXPECT_EQ(readSewLane(vm.registers_, 7, lane, sew), (a - 3u) & mask);
+            EXPECT_EQ(readSewLane(vm.registers_, 8, lane, sew), signed_less(a, b) ? a : b);
+            EXPECT_EQ(readSewLane(vm.registers_, 9, lane, sew), std::min(a, b));
+            EXPECT_EQ(readSewLane(vm.registers_, 10, lane, sew), signed_less(a, b) ? b : a);
+            EXPECT_EQ(readSewLane(vm.registers_, 11, lane, sew), std::max(a, b));
+            const size_t shift = static_cast<size_t>(b & (sew - 1u));
+            EXPECT_EQ(readSewLane(vm.registers_, 12, lane, sew), (a << shift) & mask);
+            EXPECT_EQ(readSewLane(vm.registers_, 13, lane, sew), a >> shift);
+            uint64_t arithmetic_right = a >> shift;
+            if (shift != 0 && (a & sign_bit) != 0)
+                arithmetic_right |= (mask << (sew - shift)) & mask;
+            EXPECT_EQ(readSewLane(vm.registers_, 14, lane, sew), arithmetic_right);
+        }
+        EXPECT_EQ(vm.vectorSew(), sew);
+        EXPECT_EQ(vm.vectorVl(), vl);
+        for (size_t byte = vl * element_bytes; byte < 16; ++byte)
+            for (size_t reg = 6; reg <= 14; ++reg)
+                EXPECT_EQ(vm.registers_.ReadVectorByte(reg, byte), 0xA5u);
+    }
+}
+
 template <typename Processor>
 void runPipelineUnitStrideMemoryForAllSews()
 {
@@ -524,6 +601,24 @@ TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionSupportsAllSews)
 TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingSupportsAllSews)
 {
     runPipelineArithmeticForAllSews<RV5StageProcessorNHNF>();
+}
+
+
+TEST(RV5VectorPipeline, HazardDetectionAndForwardingSupportsExtendedIntegerOpsAtAllSews)
+{
+    runPipelineExtendedIntegerOpsForAllSews<RV5StageProcessorHF>();
+}
+TEST(RV5VectorPipeline, HazardDetectionWithoutForwardingSupportsExtendedIntegerOpsAtAllSews)
+{
+    runPipelineExtendedIntegerOpsForAllSews<RV5StageProcessorHNF>();
+}
+TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionSupportsExtendedIntegerOpsAtAllSews)
+{
+    runPipelineExtendedIntegerOpsForAllSews<RV5StageProcessorNHF>();
+}
+TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingSupportsExtendedIntegerOpsAtAllSews)
+{
+    runPipelineExtendedIntegerOpsForAllSews<RV5StageProcessorNHNF>();
 }
 
 TEST(RV5VectorPipeline, HazardDetectionAndForwardingSupportsUnitStrideMemoryAtAllSews)

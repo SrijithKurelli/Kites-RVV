@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <initializer_list>
 #include <sstream>
@@ -1298,6 +1300,119 @@ TEST(VectorExtension, AssemblerEncodesAndDisassemblesVectorMultiply)
               "vmul.vv v7, v8, v9");
     EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[1]),
               "vmul.vv v10, v11, v12, v0.t");
+}
+
+
+TEST(VectorExtension, AssemblerEncodesAndDisassemblesSelectedIntegerVectorExtensions)
+{
+    const auto program = assembleVectorSource(
+        "vadd.vx v1, v2, x3\n"
+        "vsub.vx v4, v5, x6, v0.t\n"
+        "vminu.vv v7, v8, v9\n"
+        "vmin.vv v10, v11, v12\n"
+        "vmaxu.vv v13, v14, v15\n"
+        "vmax.vv v16, v17, v18\n"
+        "vsll.vv v19, v20, v21\n"
+        "vsrl.vv v22, v23, v24\n"
+        "vsra.vv v25, v26, v27\n");
+    ASSERT_EQ(program.text_buffer.size(), 9u);
+    const uint32_t expected[] = {
+        0x0221C0D7u, 0x08534257u, 0x128483D7u,
+        0x16B60557u, 0x1AE786D7u, 0x1F190857u,
+        0x974A89D7u, 0xA37C0B57u, 0xA7AD8CD7u
+    };
+    const char *disassembly[] = {
+        "vadd.vx v1, v2, x3", "vsub.vx v4, v5, x6, v0.t",
+        "vminu.vv v7, v8, v9", "vmin.vv v10, v11, v12",
+        "vmaxu.vv v13, v14, v15", "vmax.vv v16, v17, v18",
+        "vsll.vv v19, v20, v21", "vsrl.vv v22, v23, v24",
+        "vsra.vv v25, v26, v27"
+    };
+    for (size_t i = 0; i < program.text_buffer.size(); ++i)
+    {
+        EXPECT_EQ(program.text_buffer[i], expected[i]) << "instruction " << i;
+        EXPECT_EQ(Kites::instruction_set::disassemble(program.text_buffer[i]), disassembly[i])
+            << "instruction " << i;
+    }
+}
+
+TEST(VectorExtension, SelectedIntegerVectorExtensionsWorkForEverySupportedSew)
+{
+    const struct Case { int zimm; unsigned sew; size_t bytes; } cases[] = {
+        {0, 8, 1}, {8, 16, 2}, {16, 32, 4}, {24, 64, 8}
+    };
+    for (const auto &test_case : cases)
+    {
+        Kites::setupVmStateDirectory();
+        Kites::RVSSProcessor vm;
+        const size_t vl = std::min<size_t>(4, 128u / test_case.sew);
+        const uint64_t mask = test_case.sew == 64
+            ? UINT64_MAX : ((uint64_t{1} << test_case.sew) - 1u);
+        const uint64_t sign_bit = uint64_t{1} << (test_case.sew - 1u);
+        const uint64_t lhs[] = {sign_bit, sign_bit - 1u, mask, 1u};
+        const uint64_t rhs[] = {1u, mask, sign_bit, 0u};
+        uint64_t sentinel = 0;
+        for (size_t byte = 0; byte < test_case.bytes; ++byte)
+            sentinel |= uint64_t{0xA5u} << (8u * byte);
+
+        vm.registers_.WriteGpr(9, 3u);
+        vm.registers_.WriteVectorByte(0, 0, 0x05u);
+        for (size_t lane = 0; lane < vl; ++lane)
+        {
+            writeElement(vm.registers_, 1, lane, test_case.bytes, lhs[lane]);
+            writeElement(vm.registers_, 2, lane, test_case.bytes, rhs[lane]);
+        }
+        for (size_t reg = 6; reg <= 14; ++reg)
+        {
+            std::array<uint8_t, 16> initial{};
+            initial.fill(0xA5u);
+            vm.registers_.WriteVector(reg, initial);
+        }
+
+        std::ostringstream source;
+        source << "vsetivli x0, " << vl << ", " << test_case.zimm << "\n"
+               << "vadd.vx v6, v1, x9, v0.t\n"
+               << "vsub.vx v7, v1, x9\n"
+               << "vmin.vv v8, v1, v2\n"
+               << "vminu.vv v9, v1, v2\n"
+               << "vmax.vv v10, v1, v2\n"
+               << "vmaxu.vv v11, v1, v2\n"
+               << "vsll.vv v12, v1, v2\n"
+               << "vsrl.vv v13, v1, v2\n"
+               << "vsra.vv v14, v1, v2\n";
+        vm.LoadProgram(assembleVectorSource(source.str()));
+        for (int step = 0; step < 10; ++step)
+            vm.Step();
+
+        const auto signed_less = [sign_bit](uint64_t a, uint64_t b) {
+            const bool a_negative = (a & sign_bit) != 0;
+            const bool b_negative = (b & sign_bit) != 0;
+            if (a_negative != b_negative)
+                return a_negative;
+            return a < b;
+        };
+        for (size_t lane = 0; lane < vl; ++lane)
+        {
+            const uint64_t a = lhs[lane], b = rhs[lane];
+            const bool active = ((0x05u >> lane) & 1u) != 0;
+            EXPECT_EQ(readElement(vm.registers_, 6, lane, test_case.bytes), active ? ((a + 3u) & mask) : sentinel);
+            EXPECT_EQ(readElement(vm.registers_, 7, lane, test_case.bytes), (a - 3u) & mask);
+            EXPECT_EQ(readElement(vm.registers_, 8, lane, test_case.bytes), signed_less(a, b) ? a : b);
+            EXPECT_EQ(readElement(vm.registers_, 9, lane, test_case.bytes), std::min(a, b));
+            EXPECT_EQ(readElement(vm.registers_, 10, lane, test_case.bytes), signed_less(a, b) ? b : a);
+            EXPECT_EQ(readElement(vm.registers_, 11, lane, test_case.bytes), std::max(a, b));
+            const size_t shift = static_cast<size_t>(b & (test_case.sew - 1u));
+            EXPECT_EQ(readElement(vm.registers_, 12, lane, test_case.bytes), (a << shift) & mask);
+            EXPECT_EQ(readElement(vm.registers_, 13, lane, test_case.bytes), a >> shift);
+            uint64_t arithmetic_right = a >> shift;
+            if (shift != 0 && (a & sign_bit) != 0)
+                arithmetic_right |= (mask << (test_case.sew - shift)) & mask;
+            EXPECT_EQ(readElement(vm.registers_, 14, lane, test_case.bytes), arithmetic_right);
+        }
+        for (size_t byte = vl * test_case.bytes; byte < 16; ++byte)
+            for (size_t reg = 6; reg <= 14; ++reg)
+                EXPECT_EQ(vm.registers_.ReadVectorByte(reg, byte), 0xA5u);
+    }
 }
 
 TEST(VectorExtension, VectorMultiplyWrapsAtEverySupportedSew)

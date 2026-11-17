@@ -376,7 +376,9 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+    "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
+    "vmin.vv", "vminu.vv", "vmax.vv", "vmaxu.vv", "vsll.vv", "vsrl.vv", "vsra.vv",
+    "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
     "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
     "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -945,6 +947,15 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"vsetivli", {SyntaxType::O_GPR_C_UIMM_C_VTYPEI}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vadd.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vsub.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
+    {"vmin.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vminu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmax.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vmaxu.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vsll.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vsrl.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vsra.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vmul.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
     {"vand.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
@@ -1148,7 +1159,9 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vmul.vv", "vmul.vx", "vand.vv", "vor.vv", "vxor.vv",
+        "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
+        "vmin.vv", "vminu.vv", "vmax.vv", "vmaxu.vv", "vsll.vv", "vsrl.vv", "vsra.vv",
+        "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
         "vredsum.vs", "vredand.vs", "vredor.vs", "vredxor.vs", "vredmin.vs", "vredmax.vs",
         "vcpop.m", "vandn.vv", "vrol.vv", "vror.vv", "vclz.v", "vctz.v", "vcpop.v",
@@ -1499,6 +1512,13 @@ std::string disassemble(uint32_t instruction)
             case 0b000000: return "vadd.vv " + operands + mask_suffix;
             case 0b000010: return "vsub.vv " + operands + mask_suffix;
             case 0b000001: return "vandn.vv " + operands + mask_suffix;
+            case 0b000100: return "vminu.vv " + operands + mask_suffix;
+            case 0b000101: return "vmin.vv " + operands + mask_suffix;
+            case 0b000110: return "vmaxu.vv " + operands + mask_suffix;
+            case 0b000111: return "vmax.vv " + operands + mask_suffix;
+            case 0b100101: return "vsll.vv " + operands + mask_suffix;
+            case 0b101000: return "vsrl.vv " + operands + mask_suffix;
+            case 0b101001: return "vsra.vv " + operands + mask_suffix;
             case 0b001001: return "vand.vv " + operands + mask_suffix;
             case 0b001010: return "vor.vv " + operands + mask_suffix;
             case 0b010100: return "vror.vv " + operands + mask_suffix;
@@ -1538,6 +1558,9 @@ std::string disassemble(uint32_t instruction)
             default: break;
             }
         }
+        if (funct3 == 0b100 && (funct6 == 0b000000 || funct6 == 0b000010))
+            return std::string(funct6 == 0b000000 ? "vadd.vx " : "vsub.vx ") +
+                   vr(rd) + ", " + vr(rs2) + ", " + xr(rs1) + mask_suffix;
         if (funct3 == 0b110 && funct6 == 0b100101)
             return "vmul.vx " + vr(rd) + ", " + vr(rs2) + ", " + xr(rs1) + mask_suffix;
         if (funct3 == 0b010 && funct6 == 0b010000 && rs1 == 0b10000)

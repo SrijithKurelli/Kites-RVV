@@ -46,7 +46,9 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
                                 funct3 == 0b110 || funct3 == 0b111);
     const bool vector_config = vector_opcode && funct3 == 0b111;
     const bool vector_immediate_config = vector_config && ((instruction >> 30) == 0b11);
-    const bool vector_scalar = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
+    const bool vector_scalar = vector_opcode &&
+        ((funct3 == 0b110 && funct6 == 0b100101) ||
+         (funct3 == 0b100 && (funct6 == 0b000000 || funct6 == 0b000010)));
     const bool read_gpr_rs1 = !vector_opcode ||
                               (vector_config && !vector_immediate_config) || vector_scalar;
     const bool read_gpr_rs2 = !vector_opcode;
@@ -119,11 +121,14 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
             (vs1 == 0b01100 || vs1 == 0b01101 || vs1 == 0b01110);
         const bool vector_multiply = vector_opcode && funct3 == 0b010 && funct6 == 0b100101;
         const bool vector_scalar_multiply = vector_opcode && funct3 == 0b110 && funct6 == 0b100101;
+        const bool vector_scalar_addsub = vector_opcode && funct3 == 0b100 &&
+            (funct6 == 0b000000 || funct6 == 0b000010);
         const bool reads_vs1_vector = vector_opcode &&
             (funct3 == 0b000 || vector_reduction || vector_multiply);
         const bool reads_vs2_vector = memory_store || vector_popcount_mask ||
             (vector_opcode && (funct3 == 0b000 || vector_reduction ||
-                               vector_unary || vector_multiply || vector_scalar_multiply));
+                               vector_unary || vector_multiply || vector_scalar_multiply ||
+                               vector_scalar_addsub));
         const bool reads_mask = !vm;
         const bool writes_vector = memory_load || (vector_opcode && !vector_popcount_mask);
         const bool current_raw = ex_mem_reg.vector_write && reads_vs2_vector &&

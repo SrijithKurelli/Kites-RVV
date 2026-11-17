@@ -602,6 +602,8 @@ void RVSSProcessor::ExecuteVector()
         funct3 == 0b010 && funct6 == 0b010010 &&
         (vs1 == 0b01100 || vs1 == 0b01101 || vs1 == 0b01110);
     const bool vector_vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
+    const bool vector_scalar_addsub = funct3 == 0b100 &&
+        (funct6 == 0b000000 || funct6 == 0b000010);
     const bool mask_producing_comparison =
         funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
 
@@ -609,7 +611,7 @@ void RVSSProcessor::ExecuteVector()
     {
         const bool vs2_is_vector_data =
             funct3 == 0b000 || supported_reduction_encoding ||
-            vector_unary_bit_count || vector_vector_multiply ||
+            vector_unary_bit_count || vector_vector_multiply || vector_scalar_addsub ||
             (funct3 == 0b110 && funct6 == 0b100101);
         const bool vs1_is_vector_data =
             funct3 == 0b000 || supported_reduction_encoding || vector_vector_multiply;
@@ -674,6 +676,35 @@ void RVSSProcessor::ExecuteVector()
             return a_negative;
         return a < b;
     };
+
+    // OPIVX vadd.vx/vsub.vx use a GPR scalar source. Only its low SEW bits
+    // participate in the lane-wise operation; masked-off and tail lanes stay undisturbed.
+    if (vector_scalar_addsub)
+    {
+        const auto source = registers_.ReadVector(vs2);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        const uint64_t scalar = registers_.ReadGpr(vs1) & element_mask;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const uint64_t lhs = readElement(source, lane);
+            const uint64_t value = funct6 == 0b000000
+                ? (lhs + scalar) & element_mask
+                : (lhs - scalar) & element_mask;
+            writeElement(result, lane, value);
+        }
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
 
     // OPMVV vmul.vv returns the low SEW bits of each element product.
     // Unsigned multiplication gives the required two's-complement low bits
@@ -804,12 +835,15 @@ void RVSSProcessor::ExecuteVector()
   // Comparison Instructions
     
     if (funct3 != 0b000)
-        throw std::runtime_error("Unsupported vector operand format; only OPIVV is implemented");
+        throw std::runtime_error("Unsupported vector operand format in selected OPIVV subset");
 
     const bool comparison = funct6 >= 0b011000 && funct6 <= 0b011011;
     const bool arithmetic_or_logic = funct6 == 0b000000 || funct6 == 0b000001 ||
-        funct6 == 0b000010 || funct6 == 0b001001 || funct6 == 0b001010 ||
-        funct6 == 0b001011 || funct6 == 0b010100 || funct6 == 0b010101;
+        funct6 == 0b000010 || funct6 == 0b000100 || funct6 == 0b000101 ||
+        funct6 == 0b000110 || funct6 == 0b000111 || funct6 == 0b001001 ||
+        funct6 == 0b001010 || funct6 == 0b001011 || funct6 == 0b010100 ||
+        funct6 == 0b010101 || funct6 == 0b100101 || funct6 == 0b101000 ||
+        funct6 == 0b101001;
     if (!comparison && !arithmetic_or_logic)
         throw std::runtime_error("Unsupported vector arithmetic/logical instruction");
 
@@ -851,6 +885,10 @@ void RVSSProcessor::ExecuteVector()
             case 0b000000: value = (a + b) & element_mask; break;
             case 0b000001: value = a & (~b) & element_mask; break; // vandn.vv
             case 0b000010: value = (a - b) & element_mask; break;
+            case 0b000100: value = std::min(a, b); break; // vminu.vv
+            case 0b000101: value = signedLess(a, b) ? a : b; break; // vmin.vv
+            case 0b000110: value = std::max(a, b); break; // vmaxu.vv
+            case 0b000111: value = signedLess(a, b) ? b : a; break; // vmax.vv
             case 0b001001: value = a & b; break;
             case 0b001010: value = a | b; break;
             case 0b001011: value = a ^ b; break;
@@ -864,6 +902,27 @@ void RVSSProcessor::ExecuteVector()
             {
                 const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
                 value = shift == 0 ? a : ((a << shift) | (a >> (vector_sew_ - shift))) & element_mask;
+                break;
+            }
+            case 0b100101: // vsll.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = (a << shift) & element_mask;
+                break;
+            }
+            case 0b101000: // vsrl.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = a >> shift;
+                break;
+            }
+            case 0b101001: // vsra.vv
+            {
+                const size_t shift = static_cast<size_t>(b & (vector_sew_ - 1u));
+                value = a >> shift;
+                const uint64_t sign_bit = uint64_t{1} << (vector_sew_ - 1u);
+                if (shift != 0 && (a & sign_bit) != 0)
+                    value |= (element_mask << (vector_sew_ - shift)) & element_mask;
                 break;
             }
             default: break;
