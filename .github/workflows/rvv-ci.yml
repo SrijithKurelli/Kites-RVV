@@ -1,0 +1,135 @@
+name: RVV build and test
+
+on:
+  push:
+    branches:
+      - rvv/milestone-1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rvv-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-qt-tests:
+    name: Linux / Qt 6.9.2 / GCC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Qt 6.9.2
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+          install-deps: true
+
+      - name: Install GoogleTest and GoogleMock sources
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtest-dev libgmock-dev
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version
+          ninja --version
+          g++ --version
+          test -f "${QT_ROOT_DIR}/lib/cmake/Qt6/Qt6Config.cmake"
+          test -f /usr/src/googletest/CMakeLists.txt
+          echo "Using Qt at ${QT_ROOT_DIR}"
+          echo "Using GoogleTest sources at /usr/src/googletest"
+
+      - name: Configure tests
+        run: >
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/usr/src/googletest
+          -DENABLE_TESTS=ON
+          -DDISABLE_GUI=ON
+          -DVM_DEBUG_PRINTS=OFF
+
+      - name: Build CLI, vector timing model, and test suite
+        run: cmake --build build/ci --target kites_cli kites_vector_timing kites_test --parallel 2
+
+      - name: Smoke-test RVSS vector examples and CLI inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          for example in examples/vector/*.s; do
+            echo "::group::Smoke test ${example}"
+            output="$(./build/ci/kites-cli "${example}" --vm rvss)"
+            printf '%s\n' "$output"
+            if [[ "$example" == *vector_average_selected.s ]]; then
+              grep -Fq '[Syscall output: 2]' <<< "$output"
+            fi
+            echo "::endgroup::"
+          done
+
+          repl_input="$(printf '%b' 'info\nregs\nexit\n')"
+          repl_output="$(printf '%s' "$repl_input" | ./build/ci/kites-cli examples/vector/vector_load_add_store.s --repl)"
+          grep -Fq 'VLEN=128, LMUL=1' <<< "$repl_output"
+          grep -Fq 'Vector registers (128-bit):' <<< "$repl_output"
+
+          timing_output="$(./build/ci/kites-vector-timing --lanes 4 --memory-delay 2 --no-trace)"
+          printf '%s\n' "$timing_output"
+          grep -Fq 'Kites abstract vector timing model' <<< "$timing_output"
+          grep -Fq 'Four-element dot product' <<< "$timing_output"
+          grep -Fq 'estimated speedup:' <<< "$timing_output"
+          grep -Fq 'memory stall cycles:' <<< "$timing_output"
+          timing_help="$(./build/ci/kites-vector-timing --help)"
+          grep -Fq 'Usage: kites-vector-timing' <<< "$timing_help"
+          ./build/ci/kites-vector-timing --startup 0 --reduction-extra 0 --memory-delay 0 --no-trace >/dev/null
+
+          if ./build/ci/kites-vector-timing --lanes 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted --lanes 0"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --memory-delay -1 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a negative memory delay"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --lanes 4junk --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a partially parsed lane count"
+            exit 1
+          fi
+
+          if ./build/ci/kites-vector-timing --vector-group 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero vector-group latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --scalar-latency 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero scalar latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --memory-latency 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero memory latency"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --issue-interval 0 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted zero issue interval"
+            exit 1
+          fi
+          if ./build/ci/kites-vector-timing --reduction-extra -1 --no-trace >/dev/null 2>&1; then
+            echo "kites-vector-timing incorrectly accepted a negative reduction overhead"
+            exit 1
+          fi
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build/ci --output-on-failure --parallel 2

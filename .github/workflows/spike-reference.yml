@@ -1,0 +1,44 @@
+name: Spike RVV reference check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spike-reference:
+    name: Spike RVV 1.0 / GCC reference
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Kites
+        uses: actions/checkout@v4
+
+      - name: Install Spike and RISC-V cross-toolchain dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            device-tree-compiler \
+            libboost-regex-dev \
+            libboost-system-dev \
+            gcc-riscv64-unknown-elf \
+            binutils-riscv64-unknown-elf
+
+      - name: Build pinned Spike 1.1.1-dev (upstream commit)
+        run: |
+          git clone --no-checkout \
+            https://github.com/riscv-software-src/riscv-isa-sim.git \
+            "$RUNNER_TEMP/riscv-isa-sim"
+          git -C "$RUNNER_TEMP/riscv-isa-sim" checkout --detach 118480991eb16c6a6f40b94fdc35acc9da2ceacd
+          git -C "$RUNNER_TEMP/riscv-isa-sim" submodule update --init --recursive
+          mkdir "$RUNNER_TEMP/spike-build"
+          cd "$RUNNER_TEMP/spike-build"
+          "$RUNNER_TEMP/riscv-isa-sim/configure" \
+            --prefix="$RUNNER_TEMP/spike-install"
+          make -j2
+          make install
+          echo "$RUNNER_TEMP/spike-install/bin" >> "$GITHUB_PATH"
+
+      - name: Compare RVSS vector golden results with Spike
+        run: bash tests/spike/run_spike_reference.sh

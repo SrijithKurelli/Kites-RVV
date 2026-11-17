@@ -1,0 +1,11 @@
+.data
+pipeline_seed: .word 0
+
+.text
+main:
+# Execute on RV5StageProcessorHF. The vector registers are seeded by the
+# automated test before the pipeline is stepped.
+vsetivli x5, 4, 16
+vadd.vv v3, v1, v2, v0.t
+vmul.vv v4, v3, v2, v0.t
+vsub.vv v5, v4, v1
