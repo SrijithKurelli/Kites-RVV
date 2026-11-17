@@ -628,9 +628,6 @@ void RVSSProcessor::ExecuteVector()
     }
 
     // Selected OPFVV arithmetic is currently implemented for FP32 (SEW=32).
-    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
-        (funct6 == 0b000000 || funct6 == 0b000010 ||
-         funct6 == 0b100100 || funct6 == 0b100000);
     if (vector_fp32_arithmetic)
     {
         if (vector_sew_ != 32)
