@@ -479,7 +479,8 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
             if (!lane_is_active(lane))
                 continue;
             const auto [value, flags] = alu::Alu::fpexecute(operation,
-                read_float(lhs, lane), read_float(rhs, lane), 0, 0);
+                read_float(lhs, lane), read_float(rhs, lane), 0,
+                static_cast<uint8_t>(registers_.ReadCsr(0x002) & 0x7u));
             (void)flags;
             write_float(result, lane, value);
         }
