@@ -384,3 +384,22 @@ tests plus vector-memory undo/redo round trips in all four pipeline variants.
 The earlier CI runs above remain historical checkpoints. Spike comparison is
 optional, manually triggered, and is not part of the normal CI gate; it has not
 yet produced a passing reference result.
+
+
+## Selected FP32 vector arithmetic (development milestone)
+
+The `rvv/vector-fp32` development branch adds the following OPFVV operations for
+`SEW=32`, `LMUL=1`, and the existing 128-bit vector register configuration:
+
+- `vfadd.vv` — lane-wise single-precision addition.
+- `vfsub.vv` — lane-wise single-precision subtraction.
+- `vfmul.vv` — lane-wise single-precision multiplication.
+- `vfdiv.vv` — lane-wise single-precision division.
+
+These operations use the existing scalar single-precision arithmetic helper,
+respect the active vector length and mask, and preserve inactive/tail lanes.
+Other element widths are rejected for these four instructions. This is a
+selected FP32 subset, not complete vector floating-point or full ISA support.
+Division-by-zero and floating-point exception behavior currently follow the
+existing scalar helper and require a separate conformance review.
+
