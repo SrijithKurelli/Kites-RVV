@@ -624,6 +624,54 @@ void RVSSProcessor::ExecuteVector()
                 "Masked vector destination cannot overlap v0 unless it writes a mask or scalar reduction result");
     }
 
+    // Selected OPFVV arithmetic is currently implemented for FP32 (SEW=32).
+    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
+        (funct6 == 0b000000 || funct6 == 0b000010 ||
+         funct6 == 0b100100 || funct6 == 0b100000);
+    if (vector_fp32_arithmetic)
+    {
+        if (vector_sew_ != 32)
+            throw std::runtime_error("Selected vector floating-point instructions require SEW=32");
+        const auto lhs = registers_.ReadVector(vs2);
+        const auto rhs = registers_.ReadVector(vs1);
+        auto result = registers_.ReadVector(vd);
+        const auto old_destination = result;
+        const auto read_float = [](const auto &bytes, size_t lane)
+        {
+            uint32_t bits = 0;
+            for (size_t byte = 0; byte < 4; ++byte)
+                bits |= static_cast<uint32_t>(bytes[lane * 4 + byte]) << (8 * byte);
+            return static_cast<uint64_t>(bits);
+        };
+        const auto write_float = [](auto &bytes, size_t lane, uint64_t bits)
+        {
+            for (size_t byte = 0; byte < 4; ++byte)
+                bytes[lane * 4 + byte] = static_cast<uint8_t>((bits >> (8 * byte)) & 0xFFu);
+        };
+        const alu::AluOp operation = funct6 == 0b000000 ? alu::AluOp::FADD_S :
+            funct6 == 0b000010 ? alu::AluOp::FSUB_S :
+            funct6 == 0b100100 ? alu::AluOp::FMUL_S : alu::AluOp::FDIV_S;
+        const uint8_t rounding_mode = static_cast<uint8_t>((registers_.ReadCsr(0x003) >> 5) & 0x7u);
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const auto [value, flags] = alu::Alu::fpexecute(
+                operation, read_float(lhs, lane), read_float(rhs, lane), 0, rounding_mode);
+            (void)flags;
+            write_float(result, lane, value);
+        }
+        registers_.WriteVector(vd, result);
+        if (old_destination != result)
+        {
+            RegisterChange change{vd, 3, 0, 0};
+            change.old_vector_value = old_destination;
+            change.new_vector_value = result;
+            current_delta_.register_changes.push_back(change);
+        }
+        return;
+    }
+
     const size_t element_bytes = vector_sew_ / 8;
     const uint64_t element_mask = vector_sew_ == 64 ? UINT64_MAX : ((uint64_t{1} << vector_sew_) - 1u);
     const auto readElement = [element_bytes](const auto &bytes, size_t lane)
