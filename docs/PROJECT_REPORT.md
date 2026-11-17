@@ -59,6 +59,14 @@ element-width wraparound. Supported logical operations are `vand.vv`,
 unsigned less-than comparisons produce packed predicate bits:
 `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`.
 
+The additional selected integer forms include `vadd.vx` and `vsub.vx`,
+which use the low SEW bits of a scalar GPR operand and wrap modulo SEW;
+signed and unsigned `vmin.vv`, `vmax.vv`, `vminu.vv`, and `vmaxu.vv`;
+and `vsll.vv`, `vsrl.vv`, and `vsra.vv`. Shift amounts are taken from the
+low `log2(SEW)` bits of the corresponding vector element. All these forms
+honor the selected mask and tail-undisturbed behavior. They are standard vector
+instructions, not custom opcodes or a claim of full RVV support.
+
 ### Aggregates and masks
 
 The subset includes `vredsum.vs`, `vredmin.vs`, `vredmax.vs`,
@@ -129,7 +137,10 @@ encoding/disassembly, all supported SEWs, arithmetic wraparound, logical
 operations, comparison boundaries and packed masks, reduction results,
 population counts, VL/VLMAX configuration, masking and tail preservation,
 unit-stride memory operations, store bounds preflight, undo/redo, and invalid
-forms.
+forms. Additional vector-pipeline tests execute the selected scalar
+add/sub, signed/unsigned min/max, and shift operations for every supported SEW
+in all four five-stage pipeline configurations. The assembler tests include
+literal expected words and disassembly checks for these nine additional forms.
 
 Twelve general RVSS assembly examples under `examples/vector/` provide
 load-compute-store, comparison/count, masked-memory, average, selected
@@ -172,11 +183,13 @@ The workflow builds the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 smoke-tests the general RVSS examples and the H_F pipeline fixture files,
 asserts that the average example prints `2`, and exercises the REPL `info`
 and `regs` commands by checking vector configuration and register output.
-The latest full validation, [CI #44028469268](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44028469268),
-passed the build, RVSS vector-example/CLI smoke checks, and all 412 active CTest
-cases with zero failures (one skipped and four disabled). It includes passing
-all-SEW arithmetic/reduction and unit-stride memory tests, plus vector-memory
-undo/redo round trips in all four five-stage pipeline variants.
+The latest full validation, [CI #44031969692](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44031969692),
+passed the build, RVSS vector-example/CLI smoke checks, and CTest with zero
+failures: 417 passed, one was skipped, and four were disabled. CTest selected
+418 cases for execution; the skipped case is included in that count. It
+includes the extended integer-operation tests at all four SEWs in all four
+five-stage variants, all-SEW arithmetic/reduction and unit-stride memory tests,
+and vector-memory undo/redo round trips in all four pipeline variants.
 
 ## 6. Abstract performance model
 
@@ -212,9 +225,10 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
   requirements. This does not make the simulator a full RVV implementation.
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
   8, 16, 32, and 64 bits.
-- Only the selected integer arithmetic, multiplication, logical, comparison, reduction,
-  population-count, unit-stride memory, and strided memory operations listed
-  above are implemented.
+- Only the selected integer arithmetic (including `vadd.vx`, `vsub.vx`, the
+  signed/unsigned min/max forms and vector shifts), multiplication, logical,
+  comparison, reduction, population-count, unit-stride memory, and strided
+  memory operations listed above are implemented.
 - `vsetvl`, other vector configuration encodings, and official vector CSRs
   are not implemented. `vsetivli` supports the 5-bit immediate AVL 0–31.
 - Tail and masked-off destination elements follow the undisturbed behavior
@@ -239,14 +253,15 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 
 The project scope identified bit-manipulation operations, strided memory,
 performance modeling, pipeline integration, and independent reference
-comparisons as stretch work. The selected bit-count, AND-NOT, rotate, strided-
-memory, multiplication and composed-kernel subsets have been implemented and
-CI-verified. The abstract vector timing model is implemented and CI-verified.
+comparisons as stretch work. The selected bit-count, AND-NOT, rotate, strided-memory, multiplication,
+scalar add/sub, signed/unsigned min/max, shift, and composed-kernel subsets
+have been implemented and CI-verified. The abstract vector timing model is
+implemented and CI-verified.
 Remaining Zvbb operations, indexed/segment memory, and full RVV conformance
 remain deferred. Selected pipeline integration is implemented and validated
 across all four five-stage models. Spike remains an optional, manually triggered
 independent comparison; its reference run has not passed and is not a required
 completion gate. The normal RVV build, example smoke tests, and CTest suite
-passed on CI run #44028469268 (412 passed, zero failed, one skipped, four
+passed on CI run #44031969692 (417 passed, zero failed, one skipped, four
 disabled).
 The limitations above make those boundaries explicit.

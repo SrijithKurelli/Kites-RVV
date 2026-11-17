@@ -90,6 +90,27 @@ A dot product composes `vmul.vv` with the existing `vredsum.vs` reduction.
 SAXPY composes `vmul.vx` with `vadd.vv`. These kernels use standard vector
 instructions; no custom dot-product or multiply-accumulate opcode is introduced.
 
+### Additional integer arithmetic, min/max, and shifts
+
+The selected integer instruction set also includes the following standard forms:
+
+- `vadd.vx vd, vs2, rs1` and `vsub.vx vd, vs2, rs1` add or subtract the
+  scalar GPR value `x[rs1]` from each active element of `vs2`. The scalar is
+  truncated to the low SEW bits and the result wraps modulo SEW.
+- `vmin.vv` and `vmax.vv` select the signed minimum or maximum of each pair
+  of elements.
+- `vminu.vv` and `vmaxu.vv` select the unsigned minimum or maximum.
+- `vsll.vv`, `vsrl.vv`, and `vsra.vv` perform logical left, logical right,
+  and arithmetic right shifts respectively. Each lane's shift amount uses only
+  the low `log2(SEW)` bits of the corresponding element in `vs1`; arithmetic
+  right shift sign-extends within the configured SEW.
+
+These forms use the standard OPIVX/OPIVV vector encodings and vector opcode
+`0x57`. They operate on active lanes below `vl`, accept the optional
+`, v0.t` predicate, and preserve masked-off and tail destination elements.
+The test suite pins the nine new assembler/disassembler encodings and checks
+their results at all four supported SEW values.
+
 The following operations apply bitwise to each active SEW-sized lane and accept an optional trailing `, v0.t` mask operand:
 
 - `vand.vv vd, vs2, vs1`
@@ -243,7 +264,8 @@ See `examples/vector/README.md` for commands and expected results. The separate 
 
 All four five-stage processor variants use the shared vector semantic path in
 `RV5StageVM_Base`. The pipeline subset covers the documented vector configuration,
-integer arithmetic and logical operations, comparisons, reductions, selected
+integer arithmetic and logical operations (including the selected scalar add/
+subtract, min/max, and shift forms), comparisons, reductions, selected
 bit-manipulation and bit-count operations, mask population count, and the
 supported unit-stride and strided one-field vector memory forms. Vector results
 are carried through the pipeline writeback path; vector loads/stores use the
@@ -271,7 +293,7 @@ all four variants. These tests validate the selected subset, not full RVV suppor
   behavior described above; software scheduling is required in the two models
   without hazard detection.
 - Only `LMUL=1` and `SEW=8/16/32/64` are supported.
-- Selected integer multiplication (`vmul.vv` and `vmul.vx`), arithmetic, logical, comparison, reduction, selected bit-manipulation, and unit-stride/strided memory operations support unmasked and `v0.t` masked forms in RVSS.
+- The documented arithmetic, logical, comparison, reduction, bit-manipulation, and unit-stride/strided memory operations are supported in RVSS and all four pipeline variants. Masked forms use `v0.t`; masked-off and tail destination lanes remain undisturbed.
 - Unit-stride and selected strided vector loads/stores require `EEW=SEW`; differing element widths, indexed/segment operations, and nonzero `nf` are not implemented.
 - Only the selected bit-manipulation instructions `vandn.vv`, `vrol.vv`, `vror.vv`, `vclz.v`, `vctz.v`, and `vcpop.v` are implemented; the rest of Zvbb is not included.
 - Average is composed from the supported masked reduction, mask population count, a scalar load of the reduction result, and the base ISA `div` instruction. The documented convention is signed integer division (round toward zero); programs must guard a zero count and choose an application-specific result. Indexed/segment memory, vector floating-point, widening/narrowing, permutation, and many other RVV operations remain unimplemented.
@@ -335,7 +357,7 @@ in `v4[0]` must be initialized before execution.
 ## Tests
 
 `test/vector_extension_test.cpp` covers 128-bit register storage/reset,
-instruction encoding, arithmetic, logical and selected bit-manipulation operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction/bit-count operations, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
+instruction encoding, arithmetic (including the additional scalar add/sub, signed/unsigned min/max, and shifts), logical and selected bit-manipulation operations at all supported SEWs, comparison masks, masked arithmetic/memory/reduction/bit-count operations, reductions, mask population count, positive and negative average-from-sum/count rounding (including `-5 / 2 = -2`) and zero-count handling,
 `vsetvli` AVL special cases, unit-stride load/store encodings and execution,
 tail preservation, memory undo/redo, unsupported vector memory forms, and
 strided memory assembly/execution across SEWs, zero stride, negative stride
@@ -343,17 +365,22 @@ with masking, and active-address store preflight. Vector multiply tests cover OP
 low-bit wraparound at all four SEWs, scalar sign/boundary inputs, and
 masked/tail preservation. The 3x3 matrix test checks all nine output elements.
 The five-stage pipeline tests cover dependent vector arithmetic/logical,
-comparison-mask, reduction and population-count sequences; vector memory in all
-four pipeline configurations; all-SEW arithmetic/reduction and unit-stride
-memory; and memory undo/redo round trips. The tests explicitly distinguish
-hazard-detection/forwarding behavior between `H_F`, `H_NF`, `NH_F`, and `NH_NF`.
+comparison-mask, reduction and population-count sequences; the additional
+scalar add/sub, signed/unsigned min/max, and shift operations at all SEWs;
+vector memory in all four pipeline configurations; all-SEW arithmetic/reduction
+and unit-stride memory; and memory undo/redo round trips. The tests explicitly
+distinguish hazard-detection/forwarding behavior between `H_F`, `H_NF`, `NH_F`,
+and `NH_NF`.
 `test/register_model_test.cpp` checks vector display in signed decimal,
 zero-padded hexadecimal, grouped binary, and each supported element width.
-CI run [#44028469268](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44028469268)
-passed the Linux build, RVSS vector-example/CLI smoke checks, and CTest: 412
-passed, zero failed, one was skipped, and four were disabled (416 registered
-cases). This run includes the all-SEW arithmetic and unit-stride memory tests
-plus vector-memory undo/redo tests in all four pipeline variants. The earlier
-CI runs above remain historical checkpoints. Spike comparison is optional,
-manually triggered, and is not part of the normal CI gate; it has not yet
-produced a passing reference result.
+The latest full validation,
+[CI #44031969692](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44031969692),
+passed the Linux build, RVSS vector-example/CLI smoke checks, and CTest:
+417 passed, zero failed, one was skipped, and four were disabled (418 active
+cases selected by CTest; four additional cases are disabled). This run includes
+the all-SEW extended integer-operation tests in RVSS and all four pipeline
+variants, as well as the all-SEW arithmetic/reduction and unit-stride memory
+tests plus vector-memory undo/redo round trips in all four pipeline variants.
+The earlier CI runs above remain historical checkpoints. Spike comparison is
+optional, manually triggered, and is not part of the normal CI gate; it has not
+yet produced a passing reference result.

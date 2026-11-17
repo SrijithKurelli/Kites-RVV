@@ -55,7 +55,11 @@ vector-memory undo/redo.
 | `vector_pipeline_hf_load_forwarding.s` | Load-use forwarding of AVL into `vsetvli` and scalar operand into `vmul.vx`. |
 
 These programs are included in the automated example assembly/smoke checks.
-The regular RVSS examples exercise the broader documented subset; H_F pipeline
-execution is limited to the instructions exercised by its unit tests.
+The named assembly fixtures above focus on the H_F pipeline's hazard/forwarding
+and undo/redo demonstrations. They are not the complete pipeline test inventory:
+programmatically assembled tests in `test/rv5s_vector_pipeline_test.cpp` exercise
+the shared selected subset across all four five-stage models, including the
+extended scalar add/sub, signed/unsigned min/max, and shift operations at all
+four SEWs. The general example files are standalone RVSS demonstrations.
 
 These programs exercise the implemented subset, not general RVV 1.0 programs. The separate abstract execution timing model is documented in `docs/VECTOR_PERFORMANCE_MODEL.md` and is available as `kites-vector-timing`.
