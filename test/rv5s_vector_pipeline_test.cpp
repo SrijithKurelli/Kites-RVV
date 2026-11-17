@@ -656,3 +656,88 @@ TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingVectorMemoryUndoRedoRoundTr
 }
 
 } // namespace
+
+namespace
+{
+template <typename Processor>
+void runAdjacentVectorLoadUseProgram()
+{
+    setupVmStateDirectory();
+    Processor vm;
+    constexpr uint64_t source_base = 0x700u;
+    vm.registers_.WriteGpr(5, source_base);
+    for (size_t lane = 0; lane < 4; ++lane)
+        vm.memory_controller_.writeWord(source_base + lane * 4u,
+                                        static_cast<uint32_t>(lane + 2u));
+
+    vm.registers_.WriteVector(2, packWords({10, 10, 10, 10}));
+    vm.LoadProgram(assemblePipelineVectorProgram(R"(
+        vsetivli x0, 4, 16
+        vle32.v v1, (x5)
+        vadd.vv v3, v1, v2
+        vmul.vv v4, v3, v2
+    )"));
+    vm.DebugRun();
+
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readWordLane(vm.registers_, 1, lane),
+                  static_cast<int32_t>(lane + 2u));
+        EXPECT_EQ(readWordLane(vm.registers_, 3, lane),
+                  static_cast<int32_t>(lane + 12u));
+        EXPECT_EQ(readWordLane(vm.registers_, 4, lane),
+                  static_cast<int32_t>((lane + 12u) * 10));
+    }
+}
+} // namespace
+
+TEST(RV5VectorPipeline, HazardDetectionAndForwardingHandlesAdjacentVectorLoadUse)
+{
+    runAdjacentVectorLoadUseProgram<RV5StageProcessorHF>();
+}
+
+TEST(RV5VectorPipeline, HazardDetectionWithoutForwardingHandlesAdjacentVectorLoadUse)
+{
+    runAdjacentVectorLoadUseProgram<RV5StageProcessorHNF>();
+}
+
+TEST(RV5VectorPipeline, ForwardingWithoutHazardDetectionHandlesAdjacentVectorLoadUse)
+{
+    runAdjacentVectorLoadUseProgram<RV5StageProcessorNHF>();
+}
+
+TEST(RV5VectorPipeline, NoHazardDetectionOrForwardingRequiresScheduledLoadUseBubbles)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHNF vm;
+    constexpr uint64_t source_base = 0x700u;
+    vm.registers_.WriteGpr(5, source_base);
+    for (size_t lane = 0; lane < 4; ++lane)
+        vm.memory_controller_.writeWord(source_base + lane * 4u,
+                                        static_cast<uint32_t>(lane + 2u));
+    vm.registers_.WriteVector(2, packWords({10, 10, 10, 10}));
+    vm.LoadProgram(assemblePipelineVectorProgram(R"(
+        vsetivli x0, 4, 16
+        nop
+        nop
+        vle32.v v1, (x5)
+        nop
+        nop
+        vadd.vv v3, v1, v2
+        nop
+        nop
+        vmul.vv v4, v3, v2
+        nop
+        nop
+    )"));
+    vm.DebugRun();
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readWordLane(vm.registers_, 1, lane),
+                  static_cast<int32_t>(lane + 2u));
+        EXPECT_EQ(readWordLane(vm.registers_, 3, lane),
+                  static_cast<int32_t>(lane + 12u));
+        EXPECT_EQ(readWordLane(vm.registers_, 4, lane),
+                  static_cast<int32_t>((lane + 12u) * 10));
+    }
+}
