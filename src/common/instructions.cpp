@@ -1163,7 +1163,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
+        "vsetvli", "vsetivli", "vfadd.vv", "vfsub.vv", "vfmul.vv", "vfdiv.vv", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
         "vmin.vv", "vminu.vv", "vmax.vv", "vmaxu.vv", "vsll.vv", "vsrl.vv", "vsra.vv",
         "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
