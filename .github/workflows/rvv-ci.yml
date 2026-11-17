@@ -3,6 +3,7 @@ name: RVV build and test
 on:
   push:
     branches:
+      - main
       - rvv/milestone-1
   pull_request:
     branches:
