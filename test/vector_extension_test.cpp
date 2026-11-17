@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <sstream>
 #include <stdexcept>
@@ -47,6 +48,49 @@ uint64_t readElement(const Kites::RegisterFile &registers, size_t reg,
         value |= static_cast<uint64_t>(registers.ReadVectorByte(reg, offset + byte)) << (8 * byte);
     return value;
 }
+}
+
+
+TEST(VectorExtension, FP32VectorArithmeticFourOperations)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+    const auto bits = [](float value)
+    {
+        uint32_t raw = 0;
+        std::memcpy(&raw, &value, sizeof(raw));
+        return raw;
+    };
+    const std::array<float, 4> lhs = {1.0f, 2.0f, 3.0f, 4.0f};
+    const std::array<float, 4> rhs = {2.0f, 2.0f, 2.0f, 2.0f};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(*registers, 1, lane, 4, bits(lhs[lane]));
+        writeElement(*registers, 2, lane, 4, bits(rhs[lane]));
+    }
+
+    manager.loadProgram(assembleVectorSource(
+        "addi x6, x0, 4\\n"
+        "vsetvli x7, x6, 16\\n"
+        "vfadd.vv v3, v1, v2\\n"
+        "vfsub.vv v4, v1, v2\\n"
+        "vfmul.vv v5, v1, v2\\n"
+        "vfdiv.vv v6, v1, v2\\n"));
+    for (int instruction = 0; instruction < 6; ++instruction)
+        manager.step();
+
+    const std::array<float, 4> add = {3.0f, 4.0f, 5.0f, 6.0f};
+    const std::array<float, 4> sub = {-1.0f, 0.0f, 1.0f, 2.0f};
+    const std::array<float, 4> mul = {2.0f, 4.0f, 6.0f, 8.0f};
+    const std::array<float, 4> div = {0.5f, 1.0f, 1.5f, 2.0f};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readElement(*registers, 3, lane, 4), bits(add[lane]));
+        EXPECT_EQ(readElement(*registers, 4, lane, 4), bits(sub[lane]));
+        EXPECT_EQ(readElement(*registers, 5, lane, 4), bits(mul[lane]));
+        EXPECT_EQ(readElement(*registers, 6, lane, 4), bits(div[lane]));
+    }
 }
 
 TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)
