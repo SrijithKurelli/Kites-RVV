@@ -71,12 +71,12 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
     }
 
     manager.loadProgram(assembleVectorSource(
-        "addi x6, x0, 4\\n"
-        "vsetvli x7, x6, 16\\n"
-        "vfadd.vv v3, v1, v2\\n"
-        "vfsub.vv v4, v1, v2\\n"
-        "vfmul.vv v5, v1, v2\\n"
-        "vfdiv.vv v6, v1, v2\\n"));
+        "addi x6, x0, 4\n"
+        "vsetvli x7, x6, 16\n"
+        "vfadd.vv v3, v1, v2\n"
+        "vfsub.vv v4, v1, v2\n"
+        "vfmul.vv v5, v1, v2\n"
+        "vfdiv.vv v6, v1, v2\n"));
     for (int instruction = 0; instruction < 6; ++instruction)
         manager.step();
 
