@@ -271,7 +271,7 @@ std::array<uint8_t, 16> packSewLanes(unsigned sew, const std::array<uint64_t, 4>
     const size_t element_bytes = sew / 8u;
     const uint64_t mask = sew == 64 ? UINT64_MAX : ((uint64_t{1} << sew) - 1u);
     // VLEN is 128 bits: SEW=64 has only two architectural lanes.
-    const size_t lane_count = std::min(values.size(), 128u / sew);
+    const size_t lane_count = std::min<size_t>(values.size(), 128u / sew);
     for (size_t lane = 0; lane < lane_count; ++lane)
     {
         const uint64_t value = values[lane] & mask;
