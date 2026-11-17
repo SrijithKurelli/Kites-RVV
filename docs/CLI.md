@@ -31,11 +31,11 @@ after execution.
 
 | Name | Processor model | Vector support |
 |---|---|---|
-| `rvss` | Single-cycle RVSS | Supports the initial vector subset described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). |
-| `rv5-nh-nf` | Five-stage, no hazard detection, no forwarding | Vector instructions are not implemented. |
-| `rv5-h-nf` | Five-stage, hazard detection, no forwarding | Vector instructions are not implemented. |
-| `rv5-nh-f` | Five-stage, no hazard detection, forwarding | Vector instructions are not implemented. |
-| `rv5-h-f` | Five-stage, hazard detection, forwarding | Vector instructions are not implemented. |
+| `rvss` | Single-cycle RVSS | Supports the selected vector subset described in [VECTOR_EXTENSION.md](VECTOR_EXTENSION.md). |
+| `rv5-nh-nf` | Five-stage, no hazard detection, no forwarding | Supports the selected vector subset; programs must insert dependency bubbles. |
+| `rv5-h-nf` | Five-stage, hazard detection, no forwarding | Supports the selected vector subset; the HDU stalls dependent operations. |
+| `rv5-nh-f` | Five-stage, no hazard detection, forwarding | Supports the selected vector subset; software must schedule hazards not covered by forwarding. |
+| `rv5-h-f` | Five-stage, hazard detection, forwarding | Supports the selected vector subset with HDU stalls and forwarding. |
 
 ### Example
 
@@ -74,7 +74,7 @@ The REPL supports the following commands:
 | `breakpoints` | List configured source-line breakpoints. |
 | `modify_register <reg> <value>` / `mreg` | Modify a scalar register or CSR. 128-bit vector registers cannot be changed through this 64-bit command. |
 | `regs` | Print GPRs, FPRs, CSRs, and all 32 128-bit vector registers. |
-| `info` | Print PC and execution counters; on RVSS, also print VLEN, LMUL, SEW, VL, and VLMAX. |
+| `info` | Print PC and execution counters; on RVSS and all four five-stage models, also print VLEN, LMUL, SEW, VL, and VLMAX. |
 | `disas` | Print the loaded program's disassembly. |
 | `print_mem <hex_addr> <rows>` / `pmem` | Print memory rows. |
 | `dump_mem <addr> <rows> [<addr> <rows>]...` / `dmem` | Dump one or more memory ranges to the memory dump file. |
@@ -83,10 +83,11 @@ The REPL supports the following commands:
 | `help` | Show command help. |
 | `exit` / `quit` / `q` | Leave the REPL. |
 
-The `info` command reports vector configuration only for RVSS because the
-five-stage pipeline processors do not currently implement this vector subset.
-The `modify_register` command is scalar-width only; vector register inspection
-is supported through `regs` and `registers_dump.json`.
+The `info` command reports vector configuration for RVSS and all four five-stage
+pipeline processors. The five-stage models execute the selected vector subset
+with the hazard/forwarding behavior described in the table above. The
+`modify_register` command is scalar-width only; vector register inspection is
+supported through `regs` and `registers_dump.json`.
 
 ## State output files
 

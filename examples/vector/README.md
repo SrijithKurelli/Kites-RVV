@@ -1,7 +1,8 @@
 # RVSS vector examples
 
-These files target the initial RVSS vector subset. Run them from the repository
-root after building `kites-cli`:
+These general assembly examples target the documented selected vector subset
+on the single-cycle RVSS processor. Run them from the repository root after
+building `kites-cli`:
 
 ```bash
 ./build/kites-cli examples/vector/vector_load_add_store.s --vm rvss
@@ -40,7 +41,10 @@ When no elements match, its branch sets the result to zero. The first four examp
 
 The following additional assembly files are used by the H_F pipeline unit tests.
 The tests seed the vector registers before execution; these files are not
-standalone result demonstrations.
+standalone result demonstrations. Separate programmatically assembled tests in
+`test/rv5s_vector_pipeline_test.cpp` also exercise the shared selected-vector
+subset in all four five-stage variants, including all-SEW arithmetic/memory and
+vector-memory undo/redo.
 
 | Program | Pipeline behavior verified |
 |---|---|

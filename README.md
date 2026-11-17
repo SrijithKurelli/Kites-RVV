@@ -1,7 +1,11 @@
 # KITES : RISC - V SIMULATOR
 
-Kites a is RISC V simulator and assembly code editor built for RISC V ISA.
-Kites supports I, M, D, and F extensions in single-cycle mode, and I and M extensions in 5-stage pipelining mode. The RVSS processor also includes an initial, limited RVV subset (`vsetvli`, `vadd.vv`, and `vsub.vv`); see [the vector extension notes](docs/VECTOR_EXTENSION.md).
+Kites is a RISC-V simulator and assembly code editor. This project branch extends
+the simulator with a selected RISC-V Vector (RVV) instruction subset in the
+single-cycle RVSS processor and all four five-stage pipeline variants. The
+implemented vector state uses VLEN=128, LMUL=1, and SEW=8/16/32/64; this is an
+incremental subset, not full RVV 1.0 compliance. See
+[the vector extension notes](docs/VECTOR_EXTENSION.md).
 
 ## Downloading and Installation
 
@@ -36,7 +40,7 @@ cmake -DCMAKE_PREFIX_PATH="path/to/Qt/6.x.x/<compiler>" ..
 
 ## Testing
 
-See [docs/TESTING.md](TESTING) for how to build and run tests, including coverage reports.
+See [docs/TESTING.md](docs/TESTING.md) for how to build and run tests, including coverage reports.
 
 ## CLI
 
