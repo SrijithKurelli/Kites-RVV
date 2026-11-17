@@ -80,16 +80,20 @@ signalled.
 ## CI
 
 The separate GitHub Actions workflow
-`.github/workflows/spike-reference.yml` builds Spike from the pinned upstream
-commit `118480991eb16c6a6f40b94fdc35acc9da2ceacd` and runs the same script on
-Ubuntu 24.04. This keeps the normal Qt/CMake/CTest workflow free of
-the additional simulator build dependencies.
+`.github/workflows/spike-reference.yml` can be triggered manually with
+`workflow_dispatch`. It builds Spike from the pinned upstream commit
+`118480991eb16c6a6f40b94fdc35acc9da2ceacd` and runs the same script on Ubuntu
+24.04. It is intentionally not run on every push and is not a required check
+for the normal Qt/CMake/CTest workflow.
 
 ## Scope and limitations
 
-This validates a focused set of standard RVV operations against a second
-functional implementation. It is not a complete ISA conformance suite, it
-does not compare every implemented mnemonic, and it does not validate Kites'
-pipeline variants. The timing model remains a separate abstract scheduler,
-not a cycle-accurate model. Spike is used only for functional ISA comparison,
-not performance measurement.
+This optional check is intended to validate a focused set of standard RVV
+operations against a second functional implementation. The current workflow
+has not produced a passing comparison, so this must not be presented as
+completed validation. The project is independently validated by its normal
+Kites build, golden-encoding checks, RVSS and pipeline execution tests, and
+CTest suite. Spike does not compare every implemented mnemonic and does not
+validate Kites' pipeline variants. The timing model remains a separate abstract
+scheduler, not a cycle-accurate model. Spike is used only for functional ISA
+comparison, not performance measurement.

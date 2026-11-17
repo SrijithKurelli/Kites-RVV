@@ -6,19 +6,27 @@
 
 ## 1. Objective and implementation boundary
 
-This project extends KITES with an initial, deliberately selected vector
-instruction subset. The implementation target is the single-cycle RVSS
-processor. It uses 32 vector registers, each 128 bits wide (VLEN=128), LMUL=1,
-and supports SEW values of 8, 16, 32, and 64 bits. This is not full RISC-V
+This project extends KITES with a deliberately selected vector instruction
+subset in the single-cycle RVSS processor and all four five-stage pipeline
+variants. The vector state has 32 registers, each 128 bits wide (VLEN=128),
+LMUL=1, and SEW values of 8, 16, 32, and 64 bits. This is not full RISC-V
 Vector (RVV 1.0) compliance.
 
 ## 2. Design overview
 
 The vector register file is maintained alongside the existing general-purpose
-and floating-point registers. Each vector register stores 16 bytes. The RVSS
-processor tracks the active SEW and VL. The vector execution path dispatches
-opcode 0x57 before scalar operand decoding so that vector register fields are
-not mistaken for GPR indices.
+and floating-point registers. Each vector register stores 16 bytes. RVSS and
+the five-stage processor base track the active SEW and VL. The vector execution
+paths dispatch vector opcode 0x57 before scalar operand decoding so that vector
+register fields are not mistaken for GPR indices.
+
+All four five-stage variants use the shared selected-vector semantic helper in
+`RV5StageVM_Base`. Vector results are carried through EX/MEM and MEM/WB, while
+unit-stride and strided vector memory operations are completed by the pipeline
+memory stage. Vector state and vector-memory changes participate in pipeline
+undo/redo. `H_F` uses hazard detection and forwarding; `H_NF` detects hazards but
+stalls without forwarding; `NH_F` forwards without automatic hazard detection;
+and `NH_NF` relies on programmer-scheduled bubbles.
 
 The implementation reuses the existing assembler, decoder/disassembler,
 memory controller, and RVSS undo/redo history. Vector register writes are
@@ -99,10 +107,10 @@ Assembler, decoder/disassembler, and RVSS execution are connected for the
 supported mnemonics. The GUI's vector register view exposes the 32 vector registers as comma-separated
 SEW-sized elements, with selectable hexadecimal, binary, and signed-decimal
 display and a presentation-only 8/16/32/64-bit lane-width selector. Vector
-rows wrap instead of eliding the 128-bit value. The CLI's `regs`
-command exposes the 32 vector registers. The CLI's `info` command reports
-VLEN, LMUL, SEW, VL, and VLMAX for RVSS; the JSON register dump contains
-`vec_registers`.
+rows wrap instead of eliding the 128-bit value. The CLI's `regs` command exposes
+the 32 vector registers. The CLI's `info` command reports VLEN, LMUL, SEW, VL,
+and VLMAX for RVSS and all four five-stage models; the JSON register dump
+contains `vec_registers`.
 
 ## 5. Validation strategy and evidence
 
@@ -126,11 +134,12 @@ forms.
 Twelve general RVSS assembly examples under `examples/vector/` provide
 load-compute-store, comparison/count, masked-memory, average, selected
 bit-manipulation, strided-memory, multiplication/dot-product, SAXPY,
-cross-product, and 2x2/3x3 matrix-multiplication workflows. Five additional
-H_F pipeline test fixtures exercise masked vector dependency stalls,
-vector writeback undo/redo, immediate and load-use GPR forwarding into
-`vsetvli` and `vmul.vx`, and all supported SEWs with tail preservation.
-The unit tests seed their vector-register inputs.
+cross-product, and 2x2/3x3 matrix-multiplication workflows. Five H_F pipeline
+fixtures exercise masked vector dependencies, writeback undo/redo, GPR
+forwarding, and all supported SEWs. Additional programmatically assembled
+pipeline tests cover dependent vector execution, unit-stride and strided memory,
+all-SEW arithmetic/reduction and memory, and vector-memory undo/redo in all four
+five-stage configurations. The unit tests seed their vector-register inputs.
 The test suite also compares a four-element scalar sum with the vector
 reduction equivalent using dynamic instruction counts: the scalar sequence
 uses 8 instructions and the vector sequence uses 4, with both producing 10.
@@ -163,10 +172,11 @@ The workflow builds the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 smoke-tests the general RVSS examples and the H_F pipeline fixture files,
 asserts that the average example prints `2`, and exercises the REPL `info`
 and `regs` commands by checking vector configuration and register output.
-The most recent successful full run, [CI #43842617996](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/43842617996),
-reports zero CTest failures (388 active tests, one skipped and four disabled).
-It includes passing tests for vector-register display in all three bases,
-the H_F vector subset and undo/redo, and the 3x3 matrix kernel.
+The latest full validation, [CI #44028469268](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44028469268),
+passed the build, RVSS vector-example/CLI smoke checks, and all 412 active CTest
+cases with zero failures (one skipped and four disabled). It includes passing
+all-SEW arithmetic/reduction and unit-stride memory tests, plus vector-memory
+undo/redo round trips in all four five-stage pipeline variants.
 
 ## 6. Abstract performance model
 
@@ -193,12 +203,13 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 
 ## 7. Known limitations
 
-- The full documented vector subset is implemented in the single-cycle RVSS
-  processor. A smaller experimental subset is implemented in the H_F
-  five-stage pipeline: vector configuration, `vadd.vv`, `vsub.vv`,
-  `vmul.vv`, and `vmul.vx`, with masked arithmetic, WB vector writeback,
-  dependency stalls, and vector undo/redo. Other pipeline variants remain
-  unsupported for vector execution.
+- The selected vector subset is implemented in RVSS and shared across all four
+  five-stage variants. The five-stage models support vector configuration,
+  selected integer arithmetic/logical, comparison, reduction, bit-count and
+  population-count operations, plus selected unit-stride/strided memory forms.
+  The four models retain their different hazard/forwarding behavior; see
+  `VECTOR_EXTENSION.md` for the exact distinctions and software-scheduling
+  requirements. This does not make the simulator a full RVV implementation.
 - VLEN is fixed at 128 bits; LMUL is fixed at 1; supported SEW values are
   8, 16, 32, and 64 bits.
 - Only the selected integer arithmetic, multiplication, logical, comparison, reduction,
@@ -219,11 +230,10 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
 - Indexed/segment/fault-only-first/whole-register memory operations are not
   implemented. Strided memory is limited to the eight one-field EEW=SEW forms
   listed above.
-- The abstract timing model does not integrate vector instructions into the
-  five-stage pipeline variants and is not a cycle-accurate processor model.
-  The H_F pipeline has an experimental subset, but pipeline support remains
-  incomplete: vector memory, reductions, comparisons, and the additional
-  vector logical/bit-manipulation operations are not implemented there.
+- The abstract timing model remains a separate scheduler and is not a
+  cycle-accurate model of the five-stage pipeline hardware. The functional
+  five-stage models execute the selected vector subset, but advanced RVV
+  facilities outside the documented instruction list remain unsupported.
 
 ## 8. Stretch work and deferred items
 
@@ -232,11 +242,11 @@ performance modeling, pipeline integration, and independent reference
 comparisons as stretch work. The selected bit-count, AND-NOT, rotate, strided-
 memory, multiplication and composed-kernel subsets have been implemented and
 CI-verified. The abstract vector timing model is implemented and CI-verified.
-Remaining Zvbb operations, indexed/segment memory, and broad vector support
-across the five-stage pipeline remain deferred. The independent Spike reference
-workflow has been added, but its current result comparison is failing; the
-debugger-based comparison is being replaced with assembly-side result assertions
-and an HTIF pass/fail mailbox. The normal RVV build, example smoke tests, and
-CTest suite passed on CI run #43842617996 (388 tests executed, zero failures,
-one skipped).
+Remaining Zvbb operations, indexed/segment memory, and full RVV conformance
+remain deferred. Selected pipeline integration is implemented and validated
+across all four five-stage models. Spike remains an optional, manually triggered
+independent comparison; its reference run has not passed and is not a required
+completion gate. The normal RVV build, example smoke tests, and CTest suite
+passed on CI run #44028469268 (412 passed, zero failed, one skipped, four
+disabled).
 The limitations above make those boundaries explicit.

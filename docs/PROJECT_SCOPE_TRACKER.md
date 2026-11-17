@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-16 (CI #43842617996 passed; HTIF-based Spike reference check in validation)
+Last updated: 2026-11-17 (CI #44028469268 passed: 412 CTest cases passed, zero failed; optional Spike comparison remains unvalidated)
 
 ## Must-have core scope
 
@@ -25,11 +25,11 @@ Last updated: 2026-11-16 (CI #43842617996 passed; HTIF-based Spike reference che
 | Unit-stride vector loads/stores | Implemented subset; CI coverage present | `vle8/16/32/64.v`, `vse8/16/32/64.v`; masked and unmasked forms; requires EEW=SEW. |
 | Assembler, decoder and execution integration | Implemented for the selected subset | Every mnemonic listed in `VECTOR_EXTENSION.md` is assembled, decoded/disassembled, and executed on RVSS; this does not imply full RVV support. |
 | CLI view of vector registers | Implemented | REPL `regs` prints all 32 128-bit vector registers; JSON dump remains available. |
-| CLI view of vector configuration | Implemented for RVSS | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX; other processor models explicitly report that vector configuration is unavailable. |
-| Assembly examples and automated tests | Implemented and CI-verified for current examples | CI #125 built the CLI and smoke-tested all ten vector examples; CI #119/#122/#123 separately exercised the dot-product, SAXPY, cross-product and 2x2 matrix kernels and their result tests. |
-| Scalar regression | Verified | CI #130 reports 100% tests passed with zero failures in 381 non-disabled test cases: 380 passed and one skipped; four tests disabled (18.69 seconds). This includes existing scalar regressions. |
+| CLI view of vector configuration | Implemented for RVSS and all four RV5 models | REPL `info` reports VLEN, LMUL, SEW, VL and VLMAX for the single-cycle and all four five-stage processors. |
+| Assembly examples and automated tests | Implemented and CI-verified | The RVSS workflow smoke-tests the vector examples and CLI inspection. CI #44028469268 also passed the full 412-case CTest set, including expanded pipeline tests. |
+| Scalar regression | Verified | CI #44028469268 passed 412/412 active CTest cases with zero failures; one additional test was skipped and four were disabled. This includes the existing scalar regressions. |
 | Scalar-vs-vector comparison | Implemented and CI-verified | CI #70 checks equal four-element-sum results and compares 8 scalar instructions with 4 vector instructions. The separate abstract timing tool compares addition, dot product and 2x2 matrix kernels under configurable scheduling assumptions; CI #125/#126 validated its build, tests and CLI input checks. |
-| Short design/validation/limitations report | Updated; final architecture/reference review pending | `docs/PROJECT_REPORT.md` distinguishes implemented instructions/kernels, abstract timing assumptions, limitations, CI evidence, and deferred pipeline/reference work. CI #127 validated masked-`v0` constraints; final team review before submission remains advisable. |
+| Short design/validation/limitations report | Updated; final team review pending | `docs/PROJECT_REPORT.md` now describes RVSS and all four five-stage pipeline variants, the abstract timing model, implementation boundaries, and CI #44028469268 evidence. Final team review before submission remains advisable. |
 
 ## Stretch scope
 
@@ -41,10 +41,10 @@ Last updated: 2026-11-16 (CI #43842617996 passed; HTIF-based Spike reference che
 | AND-NOT and rotate operations | Partially implemented; CI-verified | Added `vandn.vv`, `vrol.vv`, and `vror.vv`; CI #70 passed tests across all supported SEWs and rotate-amount masking. Scalar/immediate variants and other Zvbb operations remain unimplemented. |
 | Strided vector loads/stores | Partially implemented; CI-verified | Added `vlse8/16/32/64.v` and `vsse8/16/32/64.v` with signed byte strides, optional `v0.t`, bounds/overflow checks, and undo/redo support. CI #73 passed tests for encoding/disassembly, all SEWs, zero and negative stride, masking, and store preflight. Indexed and segment forms remain unsupported. |
 | Cross-product and matrix kernels | Implemented and CI-verified for 2x2 and 3x3 | Cross product composes two `vmul.vv` operations and `vsub.vv`; 2x2 multiplication composes four multiply/reduction pairs. The 3x3 example composes nine `vmul.vv` + `vredsum.vs` dot products and stores row-major output. The 3x3 result test passed CI #43842617996. |
-| Abstract vector-unit timing model | Implemented and CI-verified; extra cycle-overflow tests pending | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #126 passed lane-slot overflow/parameter tests and strict CLI input checks. Additional uint64 latency/completion/issue-overflow regressions are staged for CI #128. It is an abstract scheduler, not a cycle-accurate processor model. |
+| Abstract vector-unit timing model | Implemented and CI-verified | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. CI #44028469268 rebuilt the model and passed its regression suite. It is an abstract scheduler, not a cycle-accurate processor model. |
 | Execution traces and performance statistics | Implemented and CI-verified | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125/#126 built the tool and passed summary, help and strict-input smoke checks. |
-| Selected pipelined vector instructions | Experimental H_F subset implemented and CI-verified for current tests | H_F carries 128-bit vector values through EX/MEM and MEM/WB, executes `vsetvli`/`vsetivli`, `vadd.vv`, `vsub.vv`, `vmul.vv`, and `vmul.vx`, handles vector RAW/WAW and mask dependencies with conservative stalls, and records vector state for undo/redo. CI #43846668542 passed dependent masked arithmetic, vector writeback undo/redo, and immediate GPR AVL/scalar forwarding. Additional tests now exercise load-use forwarding for AVL/scalar operands and all four SEWs with tail preservation. This does not add vector execution to the other pipeline variants or make H_F a complete RVV implementation. |
-| Independent reference / Spike comparison | HTIF-based reference check in validation | Optional workflow builds pinned Spike 1.1.1-dev commit `1184809` and the Ubuntu RISC-V cross-toolchain. The reference program now initializes its reduction seed explicitly, checks every `vmul.vv` and `vmul.vx` output lane plus the `vredsum.vs` result in assembly, and signals pass/fail through Spike's standard HTIF mailbox. The previous debugger-based comparison failed and has been removed. Mark the independent comparison complete only after the new workflow passes. Focused semantic cross-check, not complete RVV conformance. |
+| Selected pipelined vector instructions | Implemented selected subset in all four RV5 variants; CI-verified | A shared vector semantic helper executes the selected configuration, arithmetic/logical, comparison, reduction, bit-count/popcount, and unit-stride/strided memory operations. All four models carry vector results through pipeline writeback and support vector memory undo/redo. CI #44028469268 passed the dependency-chain tests, all-SEW arithmetic/reduction tests, all-SEW unit-stride-memory tests, and memory undo/redo round trips in `H_F`, `H_NF`, `NH_F`, and `NH_NF`. Hazard detection and forwarding remain model-specific; see `VECTOR_EXTENSION.md`. This is a selected subset, not full RVV support. |
+| Independent reference / Spike comparison | Optional; not yet validated | A separate manual workflow builds pinned Spike 1.1.1-dev and compares a small bare-metal subset (`vmul.vv`, `vmul.vx`, `vredsum.vs`) using HTIF pass/fail. The comparison has not passed and is not part of the required normal CI gate or core completion criteria. |
 
 ## Additional hardening beyond the stated scope
 
@@ -58,7 +58,7 @@ Last updated: 2026-11-16 (CI #43842617996 passed; HTIF-based Spike reference che
 
 ## Current implementation boundaries
 
-- The broad vector instruction subset is RVSS single-cycle. A smaller experimental subset is also present in the H_F five-stage pipeline; other pipeline variants remain unsupported.
+- The documented selected vector subset is implemented in RVSS and in all four five-stage pipeline variants through a shared semantic path. Pipeline hazard/forwarding behavior differs by model as described in `VECTOR_EXTENSION.md`.
 - Supported state is VLEN=128, LMUL=1, SEW in {8,16,32,64}.
 - Current vector arithmetic includes `vadd.vv`, `vsub.vv`, `vmul.vv`, and `vmul.vx`; multiplication is low-SEW-bit only and supports optional `v0.t` predication. `vmul.vv` passed CI #119; `vmul.vx` passed CI #122.
 - Current vector comparisons are `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`; they produce packed predicate bits and support optional masking.
@@ -69,6 +69,6 @@ Last updated: 2026-11-16 (CI #43842617996 passed; HTIF-based Spike reference che
 ## Working rules
 
 1. Keep implementation work on `rvv/milestone-1`; do not merge to `main` until review and regression checks pass.
-2. Add each newly supported vector mnemonic and its exact operand syntax to `docs/VECTOR_EXTENSION.md` and the project update notes.
+2. Add each newly supported vector mnemonic and its exact operand syntax to `docs/VECTOR_EXTENSION.md`, the assembler tests, and the project update notes.
 3. Add tests for encoding, disassembly, execution, SEW boundaries, VL/tail/mask behavior, undo/redo where applicable, and scalar regressions.
 4. Mark stretch work separately from must-have scope. Any omitted scope item must be explicitly identified in the final report rather than silently treated as complete.
