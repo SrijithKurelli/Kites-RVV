@@ -430,6 +430,9 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
     const bool vector_scalar_addsub = funct3 == 0b100 &&
         (funct6 == 0b000000 || funct6 == 0b000010);
+    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
+        (funct6 == 0b000000 || funct6 == 0b000010 ||
+         funct6 == 0b100100 || funct6 == 0b100000);
     const bool mask_comparison =
         funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
 
@@ -437,9 +440,9 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     {
         const bool vs2_is_data =
             funct3 == 0b000 || reduction || unary_bit_count ||
-            vector_vector_multiply || vector_scalar_multiply || vector_scalar_addsub;
+            vector_vector_multiply || vector_scalar_multiply || vector_scalar_addsub || vector_fp32_arithmetic;
         const bool vs1_is_data =
-            funct3 == 0b000 || reduction || vector_vector_multiply;
+            funct3 == 0b000 || reduction || vector_vector_multiply || vector_fp32_arithmetic;
         if ((vs2_is_data && vs2 == 0) || (vs1_is_data && rs1 == 0))
             throw std::runtime_error(
                 "Masked vector data sources cannot overlap v0 (mask EEW differs from data EEW)");
@@ -449,9 +452,6 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     }
 
     // Selected OPFVV arithmetic is currently implemented for FP32 (SEW=32).
-    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
-        (funct6 == 0b000000 || funct6 == 0b000010 ||
-         funct6 == 0b100100 || funct6 == 0b100000);
     if (vector_fp32_arithmetic)
     {
         if (vector_sew_ != 32)
