@@ -651,7 +651,7 @@ void RVSSProcessor::ExecuteVector()
         const alu::AluOp operation = funct6 == 0b000000 ? alu::AluOp::FADD_S :
             funct6 == 0b000010 ? alu::AluOp::FSUB_S :
             funct6 == 0b100100 ? alu::AluOp::FMUL_S : alu::AluOp::FDIV_S;
-        const uint8_t rounding_mode = static_cast<uint8_t>((registers_.ReadCsr(0x003) >> 5) & 0x7u);
+        const uint8_t rounding_mode = static_cast<uint8_t>(registers_.ReadCsr(0x002) & 0x7u);
         for (size_t lane = 0; lane < vector_vl_; ++lane)
         {
             if (!lane_is_active(lane))
