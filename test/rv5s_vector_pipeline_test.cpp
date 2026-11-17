@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <algorithm>
 #include <cstdint>
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -270,7 +270,9 @@ std::array<uint8_t, 16> packSewLanes(unsigned sew, const std::array<uint64_t, 4>
     std::array<uint8_t, 16> bytes{};
     const size_t element_bytes = sew / 8u;
     const uint64_t mask = sew == 64 ? UINT64_MAX : ((uint64_t{1} << sew) - 1u);
-    for (size_t lane = 0; lane < 4; ++lane)
+    // VLEN is 128 bits: SEW=64 has only two architectural lanes.
+    const size_t lane_count = std::min(values.size(), 128u / sew);
+    for (size_t lane = 0; lane < lane_count; ++lane)
     {
         const uint64_t value = values[lane] & mask;
         for (size_t byte = 0; byte < element_bytes; ++byte)
@@ -308,11 +310,8 @@ void runPipelineArithmeticForAllSews()
 {
     for (const unsigned sew : {8u, 16u, 32u, 64u})
     {
-        std::cerr << "[RV5 all-SEW] begin SEW=" << sew << std::endl;
         setupVmStateDirectory();
-        std::cerr << "[RV5 all-SEW] state directory ready SEW=" << sew << std::endl;
         Processor vm;
-        std::cerr << "[RV5 all-SEW] processor constructed SEW=" << sew << std::endl;
         vm.registers_.WriteVector(1, packSewLanes(sew, {1, 2, 3, 4}));
         vm.registers_.WriteVector(2, packSewLanes(sew, {2, 3, 4, 5}));
         vm.registers_.WriteVector(6, packSewLanes(sew, {5, 0, 0, 0}));
@@ -325,15 +324,9 @@ void runPipelineArithmeticForAllSews()
                << "nop\nnop\n"
                << "vredsum.vs v5, v4, v6\n"
                << "nop\nnop\n";
-        std::cerr << "[RV5 all-SEW] assembling SEW=" << sew << std::endl;
         const auto assembled = assemblePipelineVectorProgram(source.str());
-        std::cerr << "[RV5 all-SEW] assembly complete SEW=" << sew << std::endl;
         vm.LoadProgram(assembled);
-        std::cerr << "[RV5 all-SEW] program loaded SEW=" << sew << std::endl;
         vm.DebugRun();
-        std::cerr << "[RV5 all-SEW] execution complete SEW=" << sew
-                  << " actual-SEW=" << static_cast<unsigned>(vm.vectorSew())
-                  << " actual-VL=" << static_cast<unsigned>(vm.vectorVl()) << std::endl;
 
         const size_t vl = std::min<size_t>(4, 128u / sew);
         const uint64_t element_mask =
@@ -353,7 +346,6 @@ void runPipelineArithmeticForAllSews()
             << "SEW=" << sew;
         EXPECT_EQ(vm.vectorSew(), sew);
         EXPECT_EQ(vm.vectorVl(), vl);
-        std::cerr << "[RV5 all-SEW] assertions complete SEW=" << sew << std::endl;
     }
 }
 

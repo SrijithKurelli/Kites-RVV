@@ -1,10 +1,6 @@
 name: Spike RVV reference check
 
 on:
-  push:
-    branches: [rvv/milestone-1]
-  pull_request:
-    branches: [rvv/milestone-1]
   workflow_dispatch:
 
 permissions:
