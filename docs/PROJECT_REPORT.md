@@ -183,13 +183,19 @@ The workflow builds the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 smoke-tests the general RVSS examples and the H_F pipeline fixture files,
 asserts that the average example prints `2`, and exercises the REPL `info`
 and `regs` commands by checking vector configuration and register output.
-The latest full validation, [CI #44031969692](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44031969692),
-passed the build, RVSS vector-example/CLI smoke checks, and CTest with zero
-failures: 417 passed, one was skipped, and four were disabled. CTest selected
-418 cases for execution; the skipped case is included in that count. It
-includes the extended integer-operation tests at all four SEWs in all four
-five-stage variants, all-SEW arithmetic/reduction and unit-stride memory tests,
-and vector-memory undo/redo round trips in all four pipeline variants.
+The latest full validation, [PR CI #192](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44074139653),
+ran against the final feature-branch commit before merge and passed the Linux
+build, RVSS vector-example/CLI/timing-tool smoke checks, and CTest with zero
+failures: 421 passed, one was skipped, and four were disabled. CTest discovered
+426 tests; 422 were selected for execution, including the one skipped case.
+This run includes the adjacent vector load-use scheduling regression, extended
+integer-operation tests at all four SEWs in all four five-stage variants,
+all-SEW arithmetic/reduction and unit-stride memory tests, and vector-memory
+undo/redo round trips in all four pipeline variants. PR #1 was subsequently
+merged into `main` at commit
+`5e204de315500ec8be602d6fb15c8095a96213da`. The CI workflow currently runs on
+pushes to `rvv/milestone-1` and pull requests targeting `main`; it does not
+trigger a separate run on pushes to `main`.
 
 ## 6. Abstract performance model
 
@@ -262,6 +268,5 @@ remain deferred. Selected pipeline integration is implemented and validated
 across all four five-stage models. Spike remains an optional, manually triggered
 independent comparison; its reference run has not passed and is not a required
 completion gate. The normal RVV build, example smoke tests, and CTest suite
-passed on CI run #44031969692 (417 passed, zero failed, one skipped, four
-disabled).
+passed on PR CI #192 (421 passed, zero failed, one skipped, four disabled).
 The limitations above make those boundaries explicit.
