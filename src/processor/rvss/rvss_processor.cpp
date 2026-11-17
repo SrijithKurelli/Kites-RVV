@@ -604,6 +604,9 @@ void RVSSProcessor::ExecuteVector()
     const bool vector_vector_multiply = funct3 == 0b010 && funct6 == 0b100101;
     const bool vector_scalar_addsub = funct3 == 0b100 &&
         (funct6 == 0b000000 || funct6 == 0b000010);
+    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
+        (funct6 == 0b000000 || funct6 == 0b000010 ||
+         funct6 == 0b100100 || funct6 == 0b100000);
     const bool mask_producing_comparison =
         funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
 
@@ -611,10 +614,10 @@ void RVSSProcessor::ExecuteVector()
     {
         const bool vs2_is_vector_data =
             funct3 == 0b000 || supported_reduction_encoding ||
-            vector_unary_bit_count || vector_vector_multiply || vector_scalar_addsub ||
+            vector_unary_bit_count || vector_vector_multiply || vector_scalar_addsub || vector_fp32_arithmetic ||
             (funct3 == 0b110 && funct6 == 0b100101);
         const bool vs1_is_vector_data =
-            funct3 == 0b000 || supported_reduction_encoding || vector_vector_multiply;
+            funct3 == 0b000 || supported_reduction_encoding || vector_vector_multiply || vector_fp32_arithmetic;
 
         if ((vs2_is_vector_data && vs2 == 0) || (vs1_is_vector_data && vs1 == 0))
             throw std::runtime_error(
