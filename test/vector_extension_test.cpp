@@ -64,12 +64,6 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
     };
     const std::array<float, 4> lhs = {1.0f, 2.0f, 3.0f, 4.0f};
     const std::array<float, 4> rhs = {2.0f, 2.0f, 2.0f, 2.0f};
-    for (size_t lane = 0; lane < 4; ++lane)
-    {
-        writeElement(*registers, 1, lane, 4, bits(lhs[lane]));
-        writeElement(*registers, 2, lane, 4, bits(rhs[lane]));
-    }
-
     manager.loadProgram(assembleVectorSource(
         "addi x6, x0, 4\n"
         "vsetvli x7, x6, 16\n"
@@ -77,6 +71,14 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
         "vfsub.vv v4, v1, v2\n"
         "vfmul.vv v5, v1, v2\n"
         "vfdiv.vv v6, v1, v2\n"));
+
+    // loadProgram resets architectural state, so seed vector operands afterwards.
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(*registers, 1, lane, 4, bits(lhs[lane]));
+        writeElement(*registers, 2, lane, 4, bits(rhs[lane]));
+    }
+
     for (int instruction = 0; instruction < 6; ++instruction)
         manager.step();
 
