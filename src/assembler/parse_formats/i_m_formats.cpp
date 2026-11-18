@@ -579,6 +579,7 @@ bool Parser::parse_O_VEC_C_VEC_C_VEC()
 
     ICUnit block;
     block.setOpcode(currentToken().value);
+    block.setImm("1"); // Unmasked is the default; explicit v0.t changes vm to zero.
     block.setLineNumber(line);
     block.setInstructionIndex(instruction_index_);
     block.setRd(peekToken(1).value);
@@ -616,6 +617,7 @@ bool Parser::parse_O_VEC_C_VEC_C_GPR()
 
     ICUnit block;
     block.setOpcode(currentToken().value);
+    block.setImm("1"); // Unmasked is the default; explicit v0.t changes vm to zero.
     block.setLineNumber(line);
     block.setInstructionIndex(instruction_index_);
     block.setRd(peekToken(1).value);
@@ -651,6 +653,7 @@ bool Parser::parse_O_VEC_C_VEC()
 
     ICUnit block;
     block.setOpcode(currentToken().value);
+    block.setImm("1"); // Unmasked is the default; explicit v0.t changes vm to zero.
     block.setLineNumber(line);
     block.setInstructionIndex(instruction_index_);
     block.setRd(peekToken(1).value);
