@@ -664,12 +664,20 @@ void RVSSProcessor::ExecuteVector()
         {
             if (!lane_is_active(lane))
                 continue;
+            const uint64_t lhs_bits = read_float(lhs, lane);
+            const uint64_t rhs_bits = read_float(rhs, lane);
             const auto [value, flags] = alu::Alu::fpexecute(
-                operation, read_float(lhs, lane), read_float(rhs, lane), 0, rounding_mode);
-            (void)flags;
+                operation, lhs_bits, rhs_bits, 0, rounding_mode);
+            if (lane == 0)
+                std::cerr << "FP32_VECTOR_LANE0 lhs=0x" << std::hex << lhs_bits
+                          << " rhs=0x" << rhs_bits << " result=0x" << value
+                          << " flags=0x" << static_cast<unsigned>(flags) << std::dec << std::endl;
             write_float(result, lane, value);
         }
         registers_.WriteVector(vd, result);
+        std::cerr << "FP32_VECTOR_WRITTEN vd=" << static_cast<unsigned>(vd)
+                  << " lane0=0x" << std::hex << read_float(registers_.ReadVector(vd), 0)
+                  << std::dec << std::endl;
         if (old_destination != result)
         {
             RegisterChange change{vd, 3, 0, 0};
