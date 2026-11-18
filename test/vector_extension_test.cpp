@@ -89,7 +89,7 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
                      [&execution_error](const QString &message, int) { execution_error = message; });
     manager.loadProgram(program);
 
-    // loadProgram resets architectural state, so seed vector operands afterwards.
+    // Seed vector operands after loading the program for deterministic test setup.
     for (size_t lane = 0; lane < 4; ++lane)
     {
         writeElement(*registers, 1, lane, 4, bits(lhs[lane]));
