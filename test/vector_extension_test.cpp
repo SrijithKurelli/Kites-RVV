@@ -64,13 +64,30 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
     };
     const std::array<float, 4> lhs = {1.0f, 2.0f, 3.0f, 4.0f};
     const std::array<float, 4> rhs = {2.0f, 2.0f, 2.0f, 2.0f};
-    manager.loadProgram(assembleVectorSource(
+    const auto program = assembleVectorSource(
         "addi x6, x0, 4\n"
         "vsetvli x7, x6, 16\n"
         "vfadd.vv v3, v1, v2\n"
         "vfsub.vv v4, v1, v2\n"
         "vfmul.vv v5, v1, v2\n"
-        "vfdiv.vv v6, v1, v2\n"));
+        "vfdiv.vv v6, v1, v2\n");
+    ASSERT_EQ(program.text_buffer.size(), 6u);
+    const std::array<uint32_t, 4> expected_funct6 = {0b000000u, 0b000010u, 0b100100u, 0b100000u};
+    for (size_t i = 0; i < expected_funct6.size(); ++i)
+    {
+        const uint32_t instruction = program.text_buffer[i + 2];
+        EXPECT_EQ(instruction & 0x7Fu, 0x57u);
+        EXPECT_EQ((instruction >> 12) & 0x7u, 0b001u);
+        EXPECT_EQ((instruction >> 26) & 0x3Fu, expected_funct6[i]);
+        EXPECT_EQ((instruction >> 25) & 1u, 1u);
+        EXPECT_EQ((instruction >> 20) & 0x1Fu, 1u);
+        EXPECT_EQ((instruction >> 15) & 0x1Fu, 2u);
+        EXPECT_EQ((instruction >> 7) & 0x1Fu, i + 3);
+    }
+    QString execution_error;
+    QObject::connect(&manager, &Kites::ProcessorManager::runErrorSignal,
+                     [&execution_error](const QString &message, int) { execution_error = message; });
+    manager.loadProgram(program);
 
     // loadProgram resets architectural state, so seed vector operands afterwards.
     for (size_t lane = 0; lane < 4; ++lane)
@@ -79,8 +96,26 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
         writeElement(*registers, 2, lane, 4, bits(rhs[lane]));
     }
 
-    for (int instruction = 0; instruction < 6; ++instruction)
-        manager.step();
+    // Step separately so a swallowed processor exception or bad vector setup
+    // is reported at the instruction that first causes it.
+    manager.step(); // addi
+    manager.step(); // vsetvli
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    EXPECT_EQ(manager.getVectorSew(), 32u);
+    EXPECT_EQ(manager.getVectorVl(), 4u);
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readElement(*registers, 1, lane, 4), bits(lhs[lane]));
+        EXPECT_EQ(readElement(*registers, 2, lane, 4), bits(rhs[lane]));
+    }
+    manager.step(); // vfadd.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfsub.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfmul.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfdiv.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
 
     const std::array<float, 4> add = {3.0f, 4.0f, 5.0f, 6.0f};
     const std::array<float, 4> sub = {-1.0f, 0.0f, 1.0f, 2.0f};
