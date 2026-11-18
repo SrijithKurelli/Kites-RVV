@@ -202,11 +202,10 @@ void ProcessorManager::step()
 {
     try
     {
-        if (!m_currentProcessor->StepAndNotify())
-        {
-            // program finished while stepping, let the run thread exit so the ui resets
-            m_currentProcessor->RequestStop();
-        }
+        // A manual step is synchronous. Reaching the end of the program is not
+        // a stop request: RequestStop() also resets architectural state, which
+        // would erase the final register/memory results before the user can inspect them.
+        (void)m_currentProcessor->StepAndNotify();
     }
     catch (const std::exception &e)
     {
