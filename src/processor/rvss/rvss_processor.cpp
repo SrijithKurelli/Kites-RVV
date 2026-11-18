@@ -630,6 +630,14 @@ void RVSSProcessor::ExecuteVector()
     // Selected OPFVV arithmetic is currently implemented for FP32 (SEW=32).
     if (vector_fp32_arithmetic)
     {
+        std::cerr << "FP32_VECTOR_DEBUG instruction=0x" << std::hex << current_instruction_
+                  << " funct6=" << static_cast<unsigned>(funct6)
+                  << " funct3=" << static_cast<unsigned>(funct3)
+                  << " vd=" << static_cast<unsigned>(vd)
+                  << " vs2=" << static_cast<unsigned>(vs2)
+                  << " vs1=" << static_cast<unsigned>(vs1)
+                  << " sew=" << std::dec << static_cast<unsigned>(vector_sew_)
+                  << " vl=" << static_cast<unsigned>(vector_vl_) << std::endl;
         if (vector_sew_ != 32)
             throw std::runtime_error("Selected vector floating-point instructions require SEW=32");
         const auto lhs = registers_.ReadVector(vs2);
