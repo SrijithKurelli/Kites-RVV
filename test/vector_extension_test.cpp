@@ -130,6 +130,19 @@ TEST(VectorExtension, FP32VectorArithmeticFourOperations)
     }
 }
 
+TEST(VectorExtension, ProcessorManagerPreservesFinalStateAfterLastStep)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+
+    manager.loadProgram(assembleVectorSource("addi x5, x0, 42\n"));
+    manager.step(); // The only and final instruction.
+
+    EXPECT_EQ(registers->ReadGpr(5), 42u);
+    EXPECT_EQ(manager.getProgramCounter(), 4u);
+}
+
 TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)
 {
     Kites::setupVmStateDirectory();
