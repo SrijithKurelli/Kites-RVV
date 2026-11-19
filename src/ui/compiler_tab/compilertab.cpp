@@ -1,6 +1,7 @@
 #include "compilertab.h"
 #include "config/app_settings.h"
 #include "ui_compilertab.h"
+#include "compiler_output_utils.h"
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
@@ -10,7 +11,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
-#include <QRegularExpression>
 #include <QStyle>
 #include <QTemporaryFile>
 #include <QTextStream>
@@ -184,7 +184,7 @@ void CompilerTab::onConvertToAssemblyClicked()
             for (const QJsonValue &line : stderrLines)
                 stderrOutput += line.toObject()["text"].toString() + "\n";
             // Compiler Explorer forwards terminal-formatted diagnostics; the GUI is plain text.
-            stderrOutput.remove(QRegularExpression("\\x1B\\[[0-?]*[ -/]*[@-~]"));
+            stderrOutput = CompilerOutput::stripAnsiEscapeSequences(stderrOutput);
 
             // If compilation failed, show errors
             if (exitCode != 0)
@@ -231,8 +231,7 @@ void CompilerTab::onConvertToAssemblyClicked()
 
 QString CompilerTab::cleanAssembly(const QString &rawAssembly)
 {
-    QString plainText = rawAssembly;
-    plainText.remove(QRegularExpression("\\x1B\\[[0-?]*[ -/]*[@-~]"));
+    QString plainText = CompilerOutput::stripAnsiEscapeSequences(rawAssembly);
     QStringList result;
     QStringList lines = plainText.split('\n');
 
