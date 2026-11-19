@@ -15,6 +15,7 @@ void Profiler::Reset()
     m_lineNumberToExecutionCounts.clear();
     m_instructionTypeCounts.fill(0);
     emit profilerReset();
+    emit updateInstructionTypeCountsSignal();
 }
 
 void Profiler::setInstructionToLineMapping(const AssembledProgram &program)
@@ -55,6 +56,7 @@ int Profiler::getLineExecutionCount(int lineNumber) const
 void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &program)
 {
     m_lineNumberToinstructionType.clear();
+    m_instructionTypeCounts.fill(0);
     qDebug() << "Setting line number to instruction type mapping for program" ;
     for (const auto &[icUnit, _] : program.intermediate_code)
     {
@@ -68,6 +70,7 @@ void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &pro
         }
     }
     emit updateLineInstructionTypeSignal(m_lineNumberToinstructionType);
+    emit updateInstructionTypeCountsSignal();
 }
 
 void Profiler::processorClockedSlot(const ProcessorState &processorState)
