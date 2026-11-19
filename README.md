@@ -7,6 +7,20 @@ implemented vector state uses VLEN=128, LMUL=1, and SEW=8/16/32/64; this is an
 incremental subset, not full RVV 1.0 compliance. See
 [the vector extension notes](docs/VECTOR_EXTENSION.md).
 
+## Vector Extension Overview
+
+The implementation supports selected vector arithmetic and logical operations,
+comparisons, reductions, masking, vector configuration, and unit-stride and
+selected strided memory operations. It also includes selected FP32 vector
+arithmetic, assembly examples, and vector-register visualization with
+hexadecimal, binary, and signed-decimal display options.
+
+The repository includes an abstract vector performance model for exploring
+lane utilization, throughput, instruction latency, and dependency or memory
+stalls. This model is separate from the simulator's cycle-accurate pipeline
+execution.
+
+
 ## Downloading and Installation
 
 Prebuilt libraries are available for Linux,Windows on [Release Page](https://github.com/hghit-harshit/Kites/releases)
