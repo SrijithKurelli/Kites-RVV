@@ -2,7 +2,7 @@
 
 This tracker follows the approved KITES Simulator Extension for Standard Vector Extension Support project-scope document. It separates required core work from stretch work and identifies optional improvements added during implementation.
 
-Last updated: 2026-11-17 (PR #1 merged into `main` at `5e204de315500ec8be602d6fb15c8095a96213da`; PR CI #192 passed: 421 passed, zero failed, one skipped, four disabled; optional Spike comparison remains unvalidated)
+Last updated: 2026-11-19 (PR #1 is merged; PR #2 adds selected FP32 operations and the final-step state-preservation fix. Latest full validation: PR CI #203 passed the Linux build, CLI/vector-example smoke checks, and CTest with 428 passed and zero failed; one test was skipped and four were disabled. Spike reference comparison is deferred and is not a completion gate.)
 
 ## Must-have core scope
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-17 (PR #1 merged into `main` at `5e204de315500ec8be602d6fb
 |---|---|---|
 | 32 vector registers, VLEN=128 | Implemented | Register file and Vector GUI section; CLI `regs` output was exercised by the REPL smoke check in CI run #70. |
 | SEW 8/16/32/64, LMUL=1 | Implemented and tested | `vsetvli` subset; `vtype` is restricted to four supported encodings; all four SEWs are covered by vector tests. |
-| Vector configuration / AVL rules | `vsetvli` and `vsetivli` CI-verified | `vsetivli` adds a 5-bit immediate AVL (0–31), with the supported SEW/VTYPE choices, and uses normal `min(AVL,VLMAX)` semantics. CI #129 passed encoding/disassembly and all-SEW AVL tests; additional parser-boundary, `rd=x0`, and load-compute-store cases are added for the next run. The `vsetvli x0,x0` unchanged-VLMAX rule remains separately tested by CI #126. |
+| Vector configuration / AVL rules | `vsetvli` and `vsetivli` CI-verified | `vsetivli` adds a 5-bit immediate AVL (0–31), with the supported SEW/VTYPE choices, and uses `min(AVL,VLMAX)` semantics. Encoding/disassembly, AVL boundaries, `rd=x0`, and load-compute-store behavior are covered by the current test suite. The `vsetvli x0,x0` unchanged-VLMAX rule is also tested. |
 | Selected integer arithmetic | Implemented subset | `vadd.vv`, `vsub.vv`; wraparound and all supported SEWs tested. |
 | Selected logical operations | Implemented subset | `vand.vv`, `vor.vv`, `vxor.vv`; unmasked lane-wise behavior tested for every supported SEW. |
 | Equality / inequality comparisons | Implemented | `vmseq.vv`, `vmsne.vv`; results are packed predicate bits. |
@@ -44,13 +44,15 @@ Last updated: 2026-11-17 (PR #1 merged into `main` at `5e204de315500ec8be602d6fb
 | Abstract vector-unit timing model | Implemented and CI-verified | Separate `VectorTimingModel` with configurable lanes, startup/group/scalar/reduction/memory latencies, dependencies, serialized memory delay, checked counters/cycles, estimated cycles and lane utilisation. PR CI #192 rebuilt the model and passed its regression suite. It is an abstract scheduler, not a cycle-accurate processor model. |
 | Execution traces and performance statistics | Implemented and CI-verified | Per-instruction issue/start/completion trace, active elements, lane groups/slots, dependency and memory stalls; CLI compares scalar/vector addition, dot product and 2x2 matrix kernels and models memory-delay sensitivity. CI #125/#126 built the tool and passed summary, help and strict-input smoke checks. |
 | Selected pipelined vector instructions | Implemented selected subset in all four RV5 variants; CI-verified | A shared vector semantic helper executes the selected configuration, arithmetic/logical, comparison, reduction, bit-count/popcount, extended scalar add/sub, signed/unsigned min/max, vector shifts, and unit-stride/strided memory operations. Commit `ec5beed` adds adjacent vector load-use regression programs for HF and HNF, verifies that NH_F requires one scheduled load-use bubble despite forwarding, and retains a scheduled-bubble control for NH_NF. All four models carry vector results through pipeline writeback and support vector memory undo/redo. PR CI #192 passed the dependency-chain tests, all-SEW arithmetic/reduction tests, all-SEW extended integer-operation tests, all-SEW unit-stride-memory tests, and memory undo/redo round trips in `H_F`, `H_NF`, `NH_F`, and `NH_NF`. Hazard detection and forwarding remain model-specific; see `VECTOR_EXTENSION.md`. This is a selected subset, not full RVV support. |
-| Independent reference / Spike comparison | Optional; not yet validated | A separate manual workflow builds pinned Spike 1.1.1-dev and compares a small bare-metal subset (`vmul.vv`, `vmul.vx`, `vredsum.vs`) using HTIF pass/fail. The comparison has not passed and is not part of the required normal CI gate or core completion criteria. |
+| Independent reference / Spike comparison | Deferred; not required for submission | Spike setup/reference comparison was dropped after repeated integration failures. No Spike conformance result is claimed; the simulator is validated with its own assembler, execution, pipeline, and regression tests. |
 
 ## Additional hardening beyond the stated scope
 
 | Extra | Status | Reason |
 |---|---|---|
 | Cross-platform test runner (`windows.h` guard) | Implemented | Allows Linux CI to compile the existing test suite. |
+| Selected FP32 vector arithmetic | Implemented and CI-verified | vfadd.vv, vfsub.vv, vfmul.vv, and vfdiv.vv support SEW=32 in RVSS and all four five-stage models, with masking and tail preservation. PR CI #203 passed the arithmetic tests in all five processor models. FP exception/rounding behavior still needs a separate conformance review. |
+| Final-step state preservation | Implemented and CI-verified | Manual stepping no longer requests a stop that resets architectural state after the last instruction. The FP32 test and a focused manager regression test pass in PR CI #203. |
 | Double-precision FMA instruction classification fix | Implemented; latest CI run passed the existing FMA tests | Upstream classifier omitted D-format FMA opcodes, causing existing double-FMA tests to fail. |
 | Continuous Qt 6.9.2 Linux build/test workflow | Implemented | Gives repeatable compile and regression feedback. |
 | Masked `v0` overlap constraints | Implemented and CI-verified | Masked ordinary vector results/data cannot overlap the `v0` predicate register at a different EEW. Mask-producing comparisons, scalar-result reductions and `vcpop.m` mask-source use are explicit exceptions. Masked vector memory data/destination register `v0` is rejected. All five reserved/permitted/unmasked regression tests passed CI #127. |
@@ -61,11 +63,12 @@ Last updated: 2026-11-17 (PR #1 merged into `main` at `5e204de315500ec8be602d6fb
 
 - The documented selected vector subset is implemented in RVSS and in all four five-stage pipeline variants through a shared semantic path. Pipeline hazard/forwarding behavior differs by model as described in `VECTOR_EXTENSION.md`.
 - Supported state is VLEN=128, LMUL=1, SEW in {8,16,32,64}.
-- Current vector arithmetic includes `vadd.vv`, `vsub.vv`, `vadd.vx`, `vsub.vx`, `vmul.vv`, and `vmul.vx`; multiplication is low-SEW-bit only and supports optional `v0.t` predication. The additional scalar add/sub, min/max, and shift instructions are listed in `VECTOR_EXTENSION.md` and passed all-SEW tests in CI #44031969692.
+- Current vector arithmetic includes `vadd.vv`, `vsub.vv`, `vadd.vx`, `vsub.vx`, `vmul.vv`, and `vmul.vx`; multiplication is low-SEW-bit only and supports optional `v0.t` predication. The selected FP32 operations vfadd.vv, vfsub.vv, vfmul.vv, and vfdiv.vv are available at SEW=32 only. The additional scalar add/sub, min/max, and shift instructions are listed in VECTOR_EXTENSION.md.
 - Current vector comparisons are `vmseq.vv`, `vmsne.vv`, `vmslt.vv`, and `vmsltu.vv`; they produce packed predicate bits and support optional masking.
 - Current vector memory support includes unit-stride and strided one-field loads/stores with EEW=SEW; strided forms use a signed byte stride from a GPR. Optional `v0.t` masks skip inactive lanes. Indexed and segment forms are not implemented.
 - Selected Zvbb-style instructions now cover element bit counts (`vclz.v`, `vctz.v`, `vcpop.v`), vector AND-NOT (`vandn.vv`), and vector rotates (`vrol.vv`, `vror.vv`). These have encoding/disassembly and execution coverage in CI #73; they do not constitute full Zvbb support.
-- This is an incremental RVV subset, not a claim of full RVV 1.0 compliance.
+- This is an incremental RVV subset, not a claim of full RVV 1.0 compliance. Indexed/segment memory, most floating-point vector operations, full Zvbb, and Spike conformance remain out of scope.
+- The normal CI job uses DISABLE_GUI=ON; it does not replace a manual check of the Qt GUI. Before the live demo, verify vector register hex/binary/signed-decimal selection, lane-width selection, comma-separated lanes, and full-width value visibility.
 
 ## Working rules
 
