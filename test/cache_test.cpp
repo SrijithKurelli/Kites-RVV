@@ -84,6 +84,23 @@ TEST_F(CacheTest, HitCountOnRepeatedRead)
     EXPECT_EQ(cache->getMissCount(), 1);
 }
 
+TEST_F(CacheTest, HitRateIsZeroBeforeAnyAccess)
+{
+    EXPECT_DOUBLE_EQ(cache->getHitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->getMissRate(), 0.0);
+}
+
+TEST_F(CacheTest, HitRateIsZeroWhenEveryAccessMisses)
+{
+    cache->readByte(0x00);
+    cache->readByte(0x10);
+    cache->readByte(0x20);
+    EXPECT_EQ(cache->getHitCount(), 0);
+    EXPECT_EQ(cache->getMissCount(), 3);
+    EXPECT_DOUBLE_EQ(cache->getHitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->getMissRate(), 1.0);
+}
+
 TEST_F(CacheTest, HitRateCalculation)
 {
     cache->writeWord(0x00, 0xDEADBEEF);  // miss
