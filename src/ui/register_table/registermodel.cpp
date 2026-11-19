@@ -75,6 +75,24 @@ QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int e
     }
     return "[" + elements.join(", ") + "]";
 }
+QString formatMaskValue(const std::array<uint8_t, 16> &bytes, int elementWidth)
+{
+    // RVV predicate registers store one bit per element, with lane 0 in bit 0.
+    // Display v0 as logical lane values instead of packed integer elements.
+    const int laneCount = 128 / elementWidth;
+    QStringList lanes;
+    lanes.reserve(laneCount);
+
+    for (int lane = 0; lane < laneCount; ++lane)
+    {
+        const size_t byteIndex = static_cast<size_t>(lane / 8);
+        const int bitIndex = lane % 8;
+        const bool active = (bytes[byteIndex] & (uint8_t{1} << bitIndex)) != 0;
+        lanes.push_back(active ? QStringLiteral("1") : QStringLiteral("0"));
+    }
+
+    return "[" + lanes.join(", ") + "]";
+}
 } // namespace
 
 
@@ -235,6 +253,8 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
                 // lanes. The selected display base applies to each lane, and
                 // comma separators make lane boundaries explicit.
                 const auto bytes = m_currentRegisterFile->ReadVector(row - 64);
+                if (row == 64) // v0 is the architectural predicate register for masked operations.
+                    return formatMaskValue(bytes, m_vectorElementWidth);
                 return formatVectorValue(bytes, m_displayBase, m_vectorElementWidth);
             }
             else
