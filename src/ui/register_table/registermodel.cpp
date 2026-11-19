@@ -76,10 +76,10 @@ QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int e
     return "[" + elements.join(", ") + "]";
 }
 
-QString formatMaskValue(const std::array<uint8_t, 16> &bytes, int elementWidth)
+QString formatMaskValue(const std::array<uint8_t, 16> &bytes, Base base, int elementWidth)
 {
     // RVV predicate registers store one bit per element, with lane 0 in bit 0.
-    // Display the logical predicate bits separately from v0's normal SEW lanes.
+    // Display each predicate bit as a scalar in the currently selected base.
     const int laneCount = 128 / elementWidth;
     QStringList lanes;
     lanes.reserve(laneCount);
@@ -89,7 +89,19 @@ QString formatMaskValue(const std::array<uint8_t, 16> &bytes, int elementWidth)
         const size_t byteIndex = static_cast<size_t>(lane / 8);
         const int bitIndex = lane % 8;
         const bool active = (bytes[byteIndex] & (uint8_t{1} << bitIndex)) != 0;
-        lanes.push_back(active ? QStringLiteral("1") : QStringLiteral("0"));
+
+        switch (base)
+        {
+        case Base::Decimal:
+            lanes.push_back(active ? QStringLiteral("1") : QStringLiteral("0"));
+            break;
+        case Base::Hexadecimal:
+            lanes.push_back(active ? QStringLiteral("0x1") : QStringLiteral("0x0"));
+            break;
+        case Base::Binary:
+            lanes.push_back(active ? QStringLiteral("0b1") : QStringLiteral("0b0"));
+            break;
+        }
     }
 
     return "[" + lanes.join(", ") + "]";
@@ -262,7 +274,7 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
                     // data and the per-lane predicate bits. This avoids hiding
                     // valid data when software uses v0 as a normal vector source.
                     return normalValue + "  |  mask: "
-                           + formatMaskValue(bytes, m_vectorElementWidth);
+                           + formatMaskValue(bytes, m_displayBase, m_vectorElementWidth);
                 }
 
                 return normalValue;
