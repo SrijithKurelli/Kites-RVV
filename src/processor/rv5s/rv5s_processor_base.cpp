@@ -430,6 +430,9 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     const bool vector_scalar_multiply = funct3 == 0b110 && funct6 == 0b100101;
     const bool vector_scalar_addsub = funct3 == 0b100 &&
         (funct6 == 0b000000 || funct6 == 0b000010);
+    const bool vector_fp32_arithmetic = funct3 == 0b001 &&
+        (funct6 == 0b000000 || funct6 == 0b000010 ||
+         funct6 == 0b100100 || funct6 == 0b100000);
     const bool mask_comparison =
         funct3 == 0b000 && funct6 >= 0b011000 && funct6 <= 0b011011;
 
@@ -437,15 +440,54 @@ RV5VectorExecutionResult RV5StageVM_Base::execute_vector_instruction(bool forwar
     {
         const bool vs2_is_data =
             funct3 == 0b000 || reduction || unary_bit_count ||
-            vector_vector_multiply || vector_scalar_multiply || vector_scalar_addsub;
+            vector_vector_multiply || vector_scalar_multiply || vector_scalar_addsub || vector_fp32_arithmetic;
         const bool vs1_is_data =
-            funct3 == 0b000 || reduction || vector_vector_multiply;
+            funct3 == 0b000 || reduction || vector_vector_multiply || vector_fp32_arithmetic;
         if ((vs2_is_data && vs2 == 0) || (vs1_is_data && rs1 == 0))
             throw std::runtime_error(
                 "Masked vector data sources cannot overlap v0 (mask EEW differs from data EEW)");
         if (vd == 0 && !mask_comparison && !reduction)
             throw std::runtime_error(
                 "Masked vector destination cannot overlap v0 unless it writes a mask/reduction");
+    }
+
+    // Selected OPFVV arithmetic is currently implemented for FP32 (SEW=32).
+    if (vector_fp32_arithmetic)
+    {
+        if (vector_sew_ != 32)
+            throw std::runtime_error("Selected vector floating-point instructions require SEW=32");
+        const auto lhs = read_vector(vs2);
+        const auto rhs = read_vector(rs1);
+        auto result = read_vector(vd);
+        const auto read_float = [](const std::array<uint8_t, 16> &bytes, size_t lane)
+        {
+            uint32_t bits = 0;
+            for (size_t byte = 0; byte < 4; ++byte)
+                bits |= static_cast<uint32_t>(bytes[lane * 4 + byte]) << (8u * byte);
+            return static_cast<uint64_t>(bits);
+        };
+        const auto write_float = [](std::array<uint8_t, 16> &bytes, size_t lane, uint64_t bits)
+        {
+            for (size_t byte = 0; byte < 4; ++byte)
+                bytes[lane * 4 + byte] = static_cast<uint8_t>((bits >> (8u * byte)) & 0xFFu);
+        };
+        const alu::AluOp operation = funct6 == 0b000000 ? alu::AluOp::FADD_S :
+            funct6 == 0b000010 ? alu::AluOp::FSUB_S :
+            funct6 == 0b100100 ? alu::AluOp::FMUL_S : alu::AluOp::FDIV_S;
+        for (size_t lane = 0; lane < vector_vl_; ++lane)
+        {
+            if (!lane_is_active(lane))
+                continue;
+            const auto [value, flags] = alu::Alu::fpexecute(operation,
+                read_float(lhs, lane), read_float(rhs, lane), 0,
+                static_cast<uint8_t>(registers_.ReadCsr(0x002) & 0x7u));
+            (void)flags;
+            write_float(result, lane, value);
+        }
+        execution.vector_result = result;
+        execution.vector_rd = vd;
+        execution.vector_write = true;
+        return execution;
     }
 
     if (vector_sew_ != 8 && vector_sew_ != 16 &&

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
 #include <sstream>
 #include <stdexcept>
@@ -47,6 +48,99 @@ uint64_t readElement(const Kites::RegisterFile &registers, size_t reg,
         value |= static_cast<uint64_t>(registers.ReadVectorByte(reg, offset + byte)) << (8 * byte);
     return value;
 }
+}
+
+
+TEST(VectorExtension, FP32VectorArithmeticFourOperations)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+    const auto bits = [](float value)
+    {
+        uint32_t raw = 0;
+        std::memcpy(&raw, &value, sizeof(raw));
+        return raw;
+    };
+    const std::array<float, 4> lhs = {1.0f, 2.0f, 3.0f, 4.0f};
+    const std::array<float, 4> rhs = {2.0f, 2.0f, 2.0f, 2.0f};
+    const auto program = assembleVectorSource(
+        "addi x6, x0, 4\n"
+        "vsetvli x7, x6, 16\n"
+        "vfadd.vv v3, v1, v2\n"
+        "vfsub.vv v4, v1, v2\n"
+        "vfmul.vv v5, v1, v2\n"
+        "vfdiv.vv v6, v1, v2\n");
+    ASSERT_EQ(program.text_buffer.size(), 6u);
+    const std::array<uint32_t, 4> expected_funct6 = {0b000000u, 0b000010u, 0b100100u, 0b100000u};
+    for (size_t i = 0; i < expected_funct6.size(); ++i)
+    {
+        const uint32_t instruction = program.text_buffer[i + 2];
+        EXPECT_EQ(instruction & 0x7Fu, 0x57u);
+        EXPECT_EQ((instruction >> 12) & 0x7u, 0b001u);
+        EXPECT_EQ((instruction >> 26) & 0x3Fu, expected_funct6[i]);
+        EXPECT_EQ((instruction >> 25) & 1u, 1u);
+        EXPECT_EQ((instruction >> 20) & 0x1Fu, 1u);
+        EXPECT_EQ((instruction >> 15) & 0x1Fu, 2u);
+        EXPECT_EQ((instruction >> 7) & 0x1Fu, i + 3);
+    }
+    QString execution_error;
+    QObject::connect(&manager, &Kites::ProcessorManager::runErrorSignal,
+                     [&execution_error](const QString &message, int) { execution_error = message; });
+    manager.loadProgram(program);
+
+    // Seed vector operands after loading the program for deterministic test setup.
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        writeElement(*registers, 1, lane, 4, bits(lhs[lane]));
+        writeElement(*registers, 2, lane, 4, bits(rhs[lane]));
+    }
+
+    // Step separately so a swallowed processor exception or bad vector setup
+    // is reported at the instruction that first causes it.
+    manager.step(); // addi
+    manager.step(); // vsetvli
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    EXPECT_EQ(manager.getVectorSew(), 32u);
+    EXPECT_EQ(manager.getVectorVl(), 4u);
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readElement(*registers, 1, lane, 4), bits(lhs[lane]));
+        EXPECT_EQ(readElement(*registers, 2, lane, 4), bits(rhs[lane]));
+    }
+    manager.step(); // vfadd.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfsub.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfmul.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+    manager.step(); // vfdiv.vv
+    EXPECT_TRUE(execution_error.isEmpty()) << execution_error.toStdString();
+
+    const std::array<float, 4> add = {3.0f, 4.0f, 5.0f, 6.0f};
+    const std::array<float, 4> sub = {-1.0f, 0.0f, 1.0f, 2.0f};
+    const std::array<float, 4> mul = {2.0f, 4.0f, 6.0f, 8.0f};
+    const std::array<float, 4> div = {0.5f, 1.0f, 1.5f, 2.0f};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        EXPECT_EQ(readElement(*registers, 3, lane, 4), bits(add[lane]));
+        EXPECT_EQ(readElement(*registers, 4, lane, 4), bits(sub[lane]));
+        EXPECT_EQ(readElement(*registers, 5, lane, 4), bits(mul[lane]));
+        EXPECT_EQ(readElement(*registers, 6, lane, 4), bits(div[lane]));
+    }
+}
+
+TEST(VectorExtension, ProcessorManagerPreservesFinalStateAfterLastStep)
+{
+    Kites::setupVmStateDirectory();
+    Kites::ProcessorManager manager(nullptr, Kites::ProcessorType::RVSS);
+    auto *registers = manager.getRegisterFile();
+
+    manager.loadProgram(assembleVectorSource("addi x5, x0, 42\n"));
+    manager.step(); // The only and final instruction.
+
+    EXPECT_EQ(registers->ReadGpr(5), 42u);
+    EXPECT_EQ(manager.getProgramCounter(), 4u);
 }
 
 TEST(VectorExtension, ProcessorManagerExposesVectorConfigurationForCli)

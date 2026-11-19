@@ -3,6 +3,7 @@
 #include <array>
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <sstream>
 #include <string>
 
@@ -112,6 +113,89 @@ void expectPipelineVectorResults(const Processor &vm)
     EXPECT_EQ(readWordLane(vm.registers_, 8, 2), 6);
     EXPECT_EQ(readWordLane(vm.registers_, 8, 3), -1);
     EXPECT_EQ(vm.registers_.ReadGpr(10), 2u);
+}
+
+
+std::array<uint8_t, 16> packFloatWords(const std::array<float, 4> &values)
+{
+    std::array<uint8_t, 16> bytes{};
+    for (size_t lane = 0; lane < values.size(); ++lane)
+    {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &values[lane], sizeof(bits));
+        for (size_t byte = 0; byte < 4; ++byte)
+            bytes[lane * 4 + byte] =
+                static_cast<uint8_t>((bits >> (8u * byte)) & 0xFFu);
+    }
+    return bytes;
+}
+
+uint32_t readFloatLaneBits(const RegisterFile &registers, size_t reg, size_t lane)
+{
+    uint32_t bits = 0;
+    for (size_t byte = 0; byte < 4; ++byte)
+        bits |= static_cast<uint32_t>(registers.ReadVectorByte(reg, lane * 4 + byte))
+                << (8u * byte);
+    return bits;
+}
+
+template <typename Processor>
+void runAndCheckFP32VectorArithmetic(Processor &vm)
+{
+    setupVmStateDirectory();
+    vm.registers_.WriteVector(1, packFloatWords({1.0f, 2.0f, 3.0f, 4.0f}));
+    vm.registers_.WriteVector(2, packFloatWords({2.0f, 2.0f, 2.0f, 2.0f}));
+    vm.LoadProgram(assemblePipelineVectorProgram(R"(
+        vsetivli x0, 4, 16
+        nop
+        nop
+        vfadd.vv v3, v1, v2
+        vfsub.vv v4, v1, v2
+        vfmul.vv v5, v1, v2
+        vfdiv.vv v6, v1, v2
+    )"));
+    vm.DebugRun();
+
+    const std::array<float, 4> expected_add = {3.0f, 4.0f, 5.0f, 6.0f};
+    const std::array<float, 4> expected_sub = {-1.0f, 0.0f, 1.0f, 2.0f};
+    const std::array<float, 4> expected_mul = {2.0f, 4.0f, 6.0f, 8.0f};
+    const std::array<float, 4> expected_div = {0.5f, 1.0f, 1.5f, 2.0f};
+    for (size_t lane = 0; lane < 4; ++lane)
+    {
+        uint32_t expected = 0;
+        std::memcpy(&expected, &expected_add[lane], sizeof(expected));
+        EXPECT_EQ(readFloatLaneBits(vm.registers_, 3, lane), expected);
+        std::memcpy(&expected, &expected_sub[lane], sizeof(expected));
+        EXPECT_EQ(readFloatLaneBits(vm.registers_, 4, lane), expected);
+        std::memcpy(&expected, &expected_mul[lane], sizeof(expected));
+        EXPECT_EQ(readFloatLaneBits(vm.registers_, 5, lane), expected);
+        std::memcpy(&expected, &expected_div[lane], sizeof(expected));
+        EXPECT_EQ(readFloatLaneBits(vm.registers_, 6, lane), expected);
+    }
+}
+
+TEST(RV5VectorPipeline, FP32ArithmeticRunsWithHazardDetectionAndForwarding)
+{
+    RV5StageProcessorHF vm;
+    runAndCheckFP32VectorArithmetic(vm);
+}
+
+TEST(RV5VectorPipeline, FP32ArithmeticRunsWithHazardDetectionWithoutForwarding)
+{
+    RV5StageProcessorHNF vm;
+    runAndCheckFP32VectorArithmetic(vm);
+}
+
+TEST(RV5VectorPipeline, FP32ArithmeticRunsWithForwardingWithoutHazardDetection)
+{
+    RV5StageProcessorNHF vm;
+    runAndCheckFP32VectorArithmetic(vm);
+}
+
+TEST(RV5VectorPipeline, FP32ArithmeticRunsWithProgrammerScheduledExecution)
+{
+    RV5StageProcessorNHNF vm;
+    runAndCheckFP32VectorArithmetic(vm);
 }
 
 TEST(RV5VectorPipeline, HazardDetectionAndForwardingExecutesDependentVectorChain)

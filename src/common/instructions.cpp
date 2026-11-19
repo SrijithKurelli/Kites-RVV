@@ -376,7 +376,7 @@ static const std::unordered_set<std::string> valid_instructions = {
     "fdiv.d", "fsqrt.d", "fsgnj.d", "fsgnjn.d", "fsgnjx.d", "fmin.d", "fmax.d", "fcvt.s.d",
     "fcvt.d.s", "feq.d", "flt.d", "fle.d", "fclass.d", "fcvt.w.d", "fcvt.wu.d", "fcvt.d.w",
     "fcvt.d.wu", "fcvt.l.d", "fcvt.lu.d", "fmv.x.d", "fcvt.d.l", "fcvt.d.lu", "fmv.d.x",
-    "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
+    "vsetvli", "vsetivli", "vfadd.vv", "vfsub.vv", "vfmul.vv", "vfdiv.vv", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
     "vmin.vv", "vminu.vv", "vmax.vv", "vmaxu.vv", "vsll.vv", "vsrl.vv", "vsra.vv",
     "vand.vv", "vor.vv", "vxor.vv",
     "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",
@@ -945,6 +945,10 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
 
     {"vsetvli", {SyntaxType::O_GPR_C_GPR_C_VTYPEI}},
     {"vsetivli", {SyntaxType::O_GPR_C_UIMM_C_VTYPEI}},
+    {"vfadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfmul.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
+    {"vfdiv.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vadd.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vsub.vv", {SyntaxType::O_VEC_C_VEC_C_VEC}},
     {"vadd.vx", {SyntaxType::O_VEC_C_VEC_C_GPR}},
@@ -1159,7 +1163,7 @@ bool isValidFDSTypeInstruction(const std::string &instruction)
 bool isValidVectorInstruction(const std::string &instruction)
 {
     static const std::unordered_set<std::string> vector_instructions = {
-        "vsetvli", "vsetivli", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
+        "vsetvli", "vsetivli", "vfadd.vv", "vfsub.vv", "vfmul.vv", "vfdiv.vv", "vadd.vv", "vsub.vv", "vadd.vx", "vsub.vx", "vmul.vv", "vmul.vx",
         "vmin.vv", "vminu.vv", "vmax.vv", "vmaxu.vv", "vsll.vv", "vsrl.vv", "vsra.vv",
         "vand.vv", "vor.vv", "vxor.vv",
         "vmseq.vv", "vmsne.vv", "vmsltu.vv", "vmslt.vv",

@@ -47,6 +47,16 @@ VL is limited by VLMAX=VLEN/SEW and the AVL operand (a GPR for `vsetvli`, or a z
 
 ### Arithmetic, logic, and comparisons
 
+The selected single-precision vector-vector operations are also implemented:
+vfadd.vv, vfsub.vv, vfmul.vv, and vfdiv.vv. They operate on 32-bit
+floating-point lanes only (SEW=32, LMUL=1), honor vl and the optional v0.t
+mask, and preserve inactive and tail elements. All four operations are covered
+in RVSS and each of the four five-stage processor variants. This is a
+deliberately small FP32 subset; vector FP conversions, widening/narrowing,
+fused vector FP operations, and other element widths are not included. The
+implementation reuses the scalar FP helper; complete floating-point flag,
+rounding, and exceptional-value conformance is not claimed.
+
 Selected integer multiplication is implemented with `vmul.vv` (OPMVV) and
 `vmul.vx` (OPMVX). Both produce the low SEW bits, accept the implemented
 `v0.t` mask form, and preserve masked-off and tail elements. High-half and
@@ -183,19 +193,16 @@ The workflow builds the CLI and test suite under Linux with Qt 6.9.2 and GCC,
 smoke-tests the general RVSS examples and the H_F pipeline fixture files,
 asserts that the average example prints `2`, and exercises the REPL `info`
 and `regs` commands by checking vector configuration and register output.
-The latest full validation, [PR CI #192](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44074139653),
-ran against the final feature-branch commit before merge and passed the Linux
-build, RVSS vector-example/CLI/timing-tool smoke checks, and CTest with zero
-failures: 421 passed, one was skipped, and four were disabled. CTest discovered
-426 tests; 422 were selected for execution, including the one skipped case.
-This run includes the adjacent vector load-use scheduling regression, extended
-integer-operation tests at all four SEWs in all four five-stage variants,
-all-SEW arithmetic/reduction and unit-stride memory tests, and vector-memory
-undo/redo round trips in all four pipeline variants. PR #1 was subsequently
-merged into `main` at commit
-`5e204de315500ec8be602d6fb15c8095a96213da`. The CI workflow currently runs on
-pushes to `rvv/milestone-1` and pull requests targeting `main`; it does not
-trigger a separate run on pushes to `main`.
+The latest complete validation, [PR CI #203](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44286591465),
+ran against the final FP32 feature-branch commit and passed the Linux build,
+RVSS vector-example/CLI/timing-tool smoke checks, and CTest: 428 passed,
+zero failed, one skipped, and four disabled. This run includes the four FP32
+vector arithmetic operations in RVSS and all four five-stage processor models,
+the final-step state-preservation regression, the existing all-SEW vector and
+pipeline tests, and the scalar regression suite. The earlier PR CI #192 run
+remains historical validation for the original integer subset; PR #1 was
+merged into main at commit
+5e204de315500ec8be602d6fb15c8095a96213da.
 
 ## 6. Abstract performance model
 
@@ -244,9 +251,12 @@ in [VECTOR_PERFORMANCE_MODEL.md](VECTOR_PERFORMANCE_MODEL.md).
   write `v0`; `vcpop.m` may use `v0` as its mask-data source. Masked vector loads
   into and stores from `v0` are reserved. Full RVV agnostic policies, register
   groups, and other overlap constraints outside this subset remain unimplemented.
-- Vector floating-point, fixed-point, widening/narrowing, and permutation
-  operations are not implemented. Only the selected bit-manipulation subset
-  described above is present; the remaining Zvbb operations are not implemented.
+- Vector floating-point support is limited to vfadd.vv, vfsub.vv, vfmul.vv,
+  and vfdiv.vv at SEW=32. Vector FP conversions, fused operations, widening/
+  narrowing, fixed-point, and permutation operations are not implemented. FP
+  flags and edge-case behavior require a separate conformance review. Only the
+  selected bit-manipulation subset described above is present; the remaining
+  Zvbb operations are not implemented.
 - Indexed/segment/fault-only-first/whole-register memory operations are not
   implemented. Strided memory is limited to the eight one-field EEW=SEW forms
   listed above.
@@ -264,9 +274,9 @@ scalar add/sub, signed/unsigned min/max, shift, and composed-kernel subsets
 have been implemented and CI-verified. The abstract vector timing model is
 implemented and CI-verified.
 Remaining Zvbb operations, indexed/segment memory, and full RVV conformance
-remain deferred. Selected pipeline integration is implemented and validated
-across all four five-stage models. Spike remains an optional, manually triggered
-independent comparison; its reference run has not passed and is not a required
-completion gate. The normal RVV build, example smoke tests, and CTest suite
-passed on PR CI #192 (421 passed, zero failed, one skipped, four disabled).
-The limitations above make those boundaries explicit.
+remain deferred. Selected pipeline integration and selected FP32 arithmetic
+are implemented and validated across all four five-stage models. Spike comparison
+is deferred and is not a required completion gate; no Spike conformance result
+is claimed. The normal Linux build, vector-example/CLI smoke tests, and full
+CTest suite passed on PR CI #203 (428 passed, zero failed, one skipped, four
+disabled). The limitations above make those boundaries explicit.

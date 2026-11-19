@@ -374,13 +374,31 @@ and `NH_NF`.
 `test/register_model_test.cpp` checks vector display in signed decimal,
 zero-padded hexadecimal, grouped binary, and each supported element width.
 The latest full validation,
-[CI #44031969692](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44031969692),
-passed the Linux build, RVSS vector-example/CLI smoke checks, and CTest:
-417 passed, zero failed, one was skipped, and four were disabled (418 active
-cases selected by CTest; four additional cases are disabled). This run includes
-the all-SEW extended integer-operation tests in RVSS and all four pipeline
-variants, as well as the all-SEW arithmetic/reduction and unit-stride memory
-tests plus vector-memory undo/redo round trips in all four pipeline variants.
-The earlier CI runs above remain historical checkpoints. Spike comparison is
-optional, manually triggered, and is not part of the normal CI gate; it has not
-yet produced a passing reference result.
+[PR CI #203](https://github.com/SrijithKurelli/Kites-RVV/actions/runs/44286591465),
+passed the Linux build, RVSS vector-example/CLI/timing-tool smoke checks, and
+CTest: 428 passed, zero failed, one skipped, and four disabled. The run includes
+FP32 arithmetic tests in RVSS and all four five-stage variants, plus the final-
+step state-preservation regression and the existing vector/scalar regression
+suite. Earlier CI runs above remain historical checkpoints. Spike comparison
+is deferred, is not part of the normal CI gate, and has no passing conformance
+result; the implementation makes no Spike or full-ISA compliance claim.
+
+
+## Selected FP32 vector arithmetic
+
+Kites supports the following selected OPFVV operations for
+`SEW=32`, `LMUL=1`, and the existing 128-bit vector register configuration:
+
+- `vfadd.vv` — lane-wise single-precision addition.
+- `vfsub.vv` — lane-wise single-precision subtraction.
+- `vfmul.vv` — lane-wise single-precision multiplication.
+- `vfdiv.vv` — lane-wise single-precision division.
+
+These operations are implemented in RVSS and all four five-stage pipeline
+variants. They use the existing scalar single-precision arithmetic helper,
+respect the active vector length and mask, and preserve inactive/tail lanes.
+Other element widths are rejected for these four instructions. This is a
+selected FP32 subset, not complete vector floating-point or full ISA support.
+Floating-point flag, rounding-mode, exceptional-value, and division-by-zero
+behavior have not undergone a separate architectural conformance review.
+

@@ -44,4 +44,4 @@ See [docs/TESTING.md](docs/TESTING.md) for how to build and run tests, including
 
 ## CLI
 
-See [docs/CLI.md](docs/CLI.md) for how to build and use the headless command-line executable.
+See [docs/CLI.md](docs/CLI.md) for how to build and use the headless command-line executable. For the CS2323 walkthrough, example commands, expected results, and final verification checklist, see [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md).
