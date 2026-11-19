@@ -30,8 +30,7 @@ sudo xattr -rd com.apple.quarantine sudo xattr -rd com.apple.quarantine /path/to
 ```
 
 ## Building
-
-To build Kites you will first neet to install Qt(version above 6.9)
+To build Kites you will first need to install Qt(version above 6.9)
 Then simply build using
 
 ```bash
