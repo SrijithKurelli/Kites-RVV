@@ -134,3 +134,33 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build/ci --output-on-failure --parallel 2
+
+      - name: Configure full GUI application
+        run: >
+          cmake -S . -B build/gui -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_PREFIX_PATH="\${QT_ROOT_DIR}"
+          -DENABLE_TESTS=OFF
+          -DDISABLE_GUI=OFF
+          -DVM_DEBUG_PRINTS=OFF
+
+      - name: Build full GUI application
+        run: cmake --build build/gui --target Kites --parallel 2
+
+      - name: Verify Compiler Explorer RISC-V GCC options
+        shell: bash
+        run: |
+          set -euo pipefail
+          valid_payload='{"source":"int main() { return 0; }","options":{"userArguments":"-march=rv64gc -mabi=lp64d -fno-exceptions -O2","filters":{"binary":false,"directives":true,"commentOnly":true,"trim":true,"labels":true}}}'
+          valid_response="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 90 \
+            -X POST "https://godbolt.org/api/compiler/rv64-cgcc1520/compile" \
+            -H "Content-Type: application/json" -H "Accept: application/json" \
+            --data "\${valid_payload}")"
+          jq -e '.code == 0 and ((.asm // []) | length > 0)' <<< "\${valid_response}" >/dev/null
+
+          invalid_payload='{"source":"int main() { return 0; }","options":{"userArguments":"-march=rv64gc -mabi=lp64d -fno-exceptions -fnot-a-real-kites-option","filters":{"binary":false,"directives":true,"commentOnly":true,"trim":true,"labels":true}}}'
+          invalid_response="$(curl --silent --show-error --retry 2 --retry-delay 2 --max-time 90 \
+            -X POST "https://godbolt.org/api/compiler/rv64-cgcc1520/compile" \
+            -H "Content-Type: application/json" -H "Accept: application/json" \
+            --data "\${invalid_payload}")"
+          jq -e '.code != 0 and ((.stderr // []) | length > 0)' <<< "\${invalid_response}" >/dev/null
