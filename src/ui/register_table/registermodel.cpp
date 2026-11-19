@@ -75,10 +75,11 @@ QString formatVectorValue(const std::array<uint8_t, 16> &bytes, Base base, int e
     }
     return "[" + elements.join(", ") + "]";
 }
+
 QString formatMaskValue(const std::array<uint8_t, 16> &bytes, int elementWidth)
 {
     // RVV predicate registers store one bit per element, with lane 0 in bit 0.
-    // Display v0 as logical lane values instead of packed integer elements.
+    // Display the logical predicate bits separately from v0's normal SEW lanes.
     const int laneCount = 128 / elementWidth;
     QStringList lanes;
     lanes.reserve(laneCount);
@@ -94,7 +95,6 @@ QString formatMaskValue(const std::array<uint8_t, 16> &bytes, int elementWidth)
     return "[" + lanes.join(", ") + "]";
 }
 } // namespace
-
 
 RegisterModel::RegisterModel(QObject *parent, RegisterFile *regfile) : QAbstractTableModel(parent)
 {
@@ -249,13 +249,23 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
             }
             else if (row < 96)
             {
-                // Interpret the 128-bit register as SEW-sized little-endian
-                // lanes. The selected display base applies to each lane, and
-                // comma separators make lane boundaries explicit.
+                // Interpret each 128-bit vector register as SEW-sized
+                // little-endian lanes, using the selected display base.
                 const auto bytes = m_currentRegisterFile->ReadVector(row - 64);
-                if (row == 64) // v0 is the architectural predicate register for masked operations.
-                    return formatMaskValue(bytes, m_vectorElementWidth);
-                return formatVectorValue(bytes, m_displayBase, m_vectorElementWidth);
+                const QString normalValue =
+                    formatVectorValue(bytes, m_displayBase, m_vectorElementWidth);
+
+                if (row == 64)
+                {
+                    // v0 is also the implicit RVV predicate register for masked
+                    // operations. Show both interpretations: ordinary vector
+                    // data and the per-lane predicate bits. This avoids hiding
+                    // valid data when software uses v0 as a normal vector source.
+                    return normalValue + "  |  mask: "
+                           + formatMaskValue(bytes, m_vectorElementWidth);
+                }
+
+                return normalValue;
             }
             else
             {
