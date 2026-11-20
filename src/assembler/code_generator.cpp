@@ -2,7 +2,6 @@
  * @file code_generator.cpp
  * @brief Contains the implementation of functions for generating machine code from intermediate
  * code.
- * @author Vishank Singh, https://github.com/VishankSingh
  */
 
 #include "code_generator.h"
