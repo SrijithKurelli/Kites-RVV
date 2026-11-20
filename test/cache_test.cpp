@@ -84,6 +84,38 @@ TEST_F(CacheTest, HitCountOnRepeatedRead)
     EXPECT_EQ(cache->getMissCount(), 1);
 }
 
+TEST_F(CacheTest, HitRateIsZeroBeforeAnyAccess)
+{
+    EXPECT_DOUBLE_EQ(cache->getHitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->getMissRate(), 0.0);
+}
+
+TEST_F(CacheTest, WarmCacheReadsAreAllHits)
+{
+    cache->writeWord(0x00, 0x12345678); // first access allocates the line
+    const size_t missesBefore = cache->getMissCount();
+
+    cache->readWord(0x00);
+    cache->readWord(0x00);
+    cache->readWord(0x00);
+
+    EXPECT_EQ(cache->getHitCount(), 3);
+    EXPECT_EQ(cache->getMissCount(), missesBefore);
+    EXPECT_DOUBLE_EQ(cache->getMissRate(), 0.25);
+    EXPECT_DOUBLE_EQ(cache->getHitRate(), 0.75);
+}
+
+TEST_F(CacheTest, HitRateIsZeroWhenEveryAccessMisses)
+{
+    cache->readByte(0x00);
+    cache->readByte(0x10);
+    cache->readByte(0x20);
+    EXPECT_EQ(cache->getHitCount(), 0);
+    EXPECT_EQ(cache->getMissCount(), 3);
+    EXPECT_DOUBLE_EQ(cache->getHitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->getMissRate(), 1.0);
+}
+
 TEST_F(CacheTest, HitRateCalculation)
 {
     cache->writeWord(0x00, 0xDEADBEEF);  // miss

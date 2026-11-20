@@ -30,7 +30,7 @@
           <item>
            <widget class="QLabel" name="label">
             <property name="text">
-             <string>TextLabel</string>
+             <string>Source Code</string>
             </property>
            </widget>
           </item>
@@ -65,7 +65,7 @@
           <item>
            <widget class="QLabel" name="label_2">
             <property name="text">
-             <string>TextLabel</string>
+             <string>Compiler Output</string>
             </property>
            </widget>
           </item>

@@ -1,6 +1,7 @@
 #include "compilertab.h"
 #include "config/app_settings.h"
 #include "ui_compilertab.h"
+#include "compiler_output_utils.h"
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
@@ -129,7 +130,8 @@ void CompilerTab::onConvertToAssemblyClicked()
 
     QByteArray jsonBody = QJsonDocument(payload).toJson(QJsonDocument::Compact);
 
-    QUrl url("https://godbolt.org/api/compiler/rv64-gcc1520/compile");
+    // Compiler Explorer compiler ID for RISC-V 64-bit GCC 15.2.0.
+    QUrl url("https://godbolt.org/api/compiler/rv64-cgcc1520/compile");
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Accept", "application/json");
@@ -181,6 +183,8 @@ void CompilerTab::onConvertToAssemblyClicked()
             QJsonArray stderrLines = root["stderr"].toArray();
             for (const QJsonValue &line : stderrLines)
                 stderrOutput += line.toObject()["text"].toString() + "\n";
+            // Compiler Explorer forwards terminal-formatted diagnostics; the GUI is plain text.
+            stderrOutput = CompilerOutput::stripAnsiEscapeSequences(stderrOutput);
 
             // If compilation failed, show errors
             if (exitCode != 0)
@@ -227,8 +231,9 @@ void CompilerTab::onConvertToAssemblyClicked()
 
 QString CompilerTab::cleanAssembly(const QString &rawAssembly)
 {
+    QString plainText = CompilerOutput::stripAnsiEscapeSequences(rawAssembly);
     QStringList result;
-    QStringList lines = rawAssembly.split('\n');
+    QStringList lines = plainText.split('\n');
 
     // Track if we're inside a real code section
     bool inTextSection = false;

@@ -12,8 +12,9 @@ Profiler::Profiler(QObject *parent) : QObject(parent)
 
 void Profiler::Reset()
 {
+    // Instruction-type counts describe the loaded program, not dynamic execution.
+    // Keep them available across a processor/profiler reset.
     m_lineNumberToExecutionCounts.clear();
-    m_instructionTypeCounts.fill(0);
     emit profilerReset();
 }
 
@@ -55,19 +56,27 @@ int Profiler::getLineExecutionCount(int lineNumber) const
 void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &program)
 {
     m_lineNumberToinstructionType.clear();
-    qDebug() << "Setting line number to instruction type mapping for program" ;
+    m_lineNumberToExecutionCounts.clear();
+    m_instructionTypeCounts.fill(0);
+    qDebug() << "Setting line number to instruction type mapping for program";
     for (const auto &[icUnit, _] : program.intermediate_code)
     {
         const auto lineNumber = icUnit.getLineNumber();
         const auto mnemonic = icUnit.getOpcode();
         if (!mnemonic.empty())
         {
-            instr::InstructionType instrType = instr::getInstructionType(mnemonic);
+            const instr::InstructionType instrType = instr::getInstructionType(mnemonic);
             m_lineNumberToinstructionType[lineNumber] = instrType;
-            m_instructionTypeCounts[toIndex(instrType)]++;
+
+            // UNKNOWN is not part of InstructionTypeCounts; ignore unclassified mnemonics
+            // rather than indexing beyond the fixed-size array.
+            const auto typeIndex = toIndex(instrType);
+            if (typeIndex < m_instructionTypeCounts.size())
+                ++m_instructionTypeCounts[typeIndex];
         }
     }
     emit updateLineInstructionTypeSignal(m_lineNumberToinstructionType);
+    emit updateInstructionTypeCountsSignal();
 }
 
 void Profiler::processorClockedSlot(const ProcessorState &processorState)
